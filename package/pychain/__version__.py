@@ -1,0 +1,7 @@
+__author__ = "ecaz.eth"
+__author_email__ = "me@ecaz.xyz"
+__description__ = "Python blockchain"
+__license__ = "Apache 2.0"
+__title__ = "pychain"
+__url__ = f"https://github.com/ecaz-eth/{__title__}"
+__version__ = "0.1.0"

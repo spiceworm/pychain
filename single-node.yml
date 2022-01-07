@@ -1,0 +1,9 @@
+version: "3.7"
+services:
+  boot_1:
+    build: { 'context': '.', 'dockerfile': './apps/node/Dockerfile' }
+    networks: { 'default': { 'aliases': ['boot1.com'] } }
+
+  client_1:
+    build: { 'context': '.', 'dockerfile': './apps/node/Dockerfile' }
+    environment: { 'BOOT_NODES': 'boot1.com:80' }
