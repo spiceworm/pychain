@@ -11,6 +11,7 @@ from . import router
 
 
 __all__ = (
+    "_broadcast",
     "_is_boot_node",
     "_my_ip",
     "_peers",
@@ -20,6 +21,17 @@ __all__ = (
 
 
 log = logging.getLogger(__name__)
+
+
+@router.put("/broadcast")
+async def _broadcast(request: Request):
+    msg = await request.json()
+    log.info("Received message: %s", msg)
+
+    for peer in cache.randomized_peers:
+        peer.broadcast(msg)
+
+    return True
 
 
 @router.get("/is-boot-node")

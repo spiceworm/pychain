@@ -48,6 +48,9 @@ class Peer:
         else:
             return f"{repr(self)} (CLIENT)"
 
+    def broadcast(self, msg):
+        return self._send(requests.put, "/api/v1/broadcast", json={"test": msg})
+
     def get_alias(self) -> str:
         try:
             resp = socket.gethostbyaddr(self.address)
