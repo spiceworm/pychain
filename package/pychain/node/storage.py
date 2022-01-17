@@ -1,10 +1,7 @@
 import pickle
-import random
-from typing import List, Set
+from typing import Dict, Union
 
 import redis
-
-from .models import Peer
 
 
 __all__ = ("cache",)
@@ -23,44 +20,34 @@ class _Cache:
         self._redis.set("address", value)
 
     @property
-    def ignored_peers(self) -> Set[Peer]:
-        if data := self._redis.get("ignored_peers"):
+    def guid(self) -> Union[int, None]:
+        _guid = self._redis.get("guid")
+        return int(_guid) if _guid is not None else _guid
+
+    @guid.setter
+    def guid(self, value: int):
+        self._redis.set("guid", int(value))
+
+    @property
+    def guid_address_map(self) -> Dict[int, str]:
+        if data := self._redis.get("guid_address_map"):
             retval = pickle.loads(data)
         else:
-            retval = set()
+            retval = {}
         return retval
 
-    @ignored_peers.setter
-    def ignored_peers(self, value: Set[Peer]) -> None:
-        self._redis.set("ignored_peers", pickle.dumps(value))
+    @guid_address_map.setter
+    def guid_address_map(self, value: Dict[int, str]) -> None:
+        self._redis.set("guid_address_map", pickle.dumps(value))
 
     @property
-    def peers(self) -> Set[Peer]:
-        if data := self._redis.get("peers"):
-            retval = pickle.loads(data)
-        else:
-            retval = set()
-        return retval
+    def network_guid(self) -> int:
+        count = self._redis.get("network_guid")
+        return int(count) if count is not None else -1
 
-    @peers.setter
-    def peers(self, value: Set[Peer]) -> None:
-        self._redis.set("peers", pickle.dumps(value))
-
-    @property
-    def peer_scan_execution_count(self) -> int:
-        if count := self._redis.get("peer_scan_execution_count"):
-            return int(count)
-        return 0
-
-    @peer_scan_execution_count.setter
-    def peer_scan_execution_count(self, value: int) -> None:
-        self._redis.set("peer_scan_execution_count", int(value))
-
-    @property
-    def randomized_peers(self) -> List[Peer]:
-        _peers = list(self.peers)
-        random.shuffle(_peers)
-        return _peers
+    @network_guid.setter
+    def network_guid(self, value: int) -> None:
+        self._redis.set("network_guid", value)
 
 
 cache = _Cache()

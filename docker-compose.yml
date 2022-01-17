@@ -3,26 +3,14 @@ services:
   boot_1:
     build: &node_build { 'context': '.', 'dockerfile': './apps/node/Dockerfile' }
     networks: { 'default': { 'aliases': ['boot1.com'] } }
-  boot_2:
-    build: *node_build
-    networks: { 'default': { 'aliases': ['boot2.com'] } }
-  boot_3:
-    build: *node_build
-    networks: { 'default': { 'aliases': ['boot3.com'] } }
-  boot_4:
-    build: *node_build
-    networks: { 'default': { 'aliases': ['boot4.com'] } }
-  boot_5:
-    build: *node_build
-    networks: { 'default': { 'aliases': ['boot5.com'] } }
 
   client_1:
     build: *node_build
-    environment: &client_env { 'BOOT_NODES': 'boot1.com:80,boot2.com:80,boot3.com:80,boot4.com:80,boot5.com:80', 'PEER_SCAN_INTERVAL': '30' }
+    environment: &client_env { 'BOOT_NODE': 'boot1.com' }
     networks: { 'default': { 'aliases': [ 'client1.com' ] } }
   client_2:
     build: *node_build
-    environment: { 'BOOT_NODES': 'boot1.com:80,boot2.com:80,boot3.com:80,boot4.com:80,boot5.com:80', 'DEDICATED_PEERS': 'client1.com:80', 'PEER_SCAN_INTERVAL': '30' }
+    environment: *client_env
     networks: { 'default': { 'aliases': [ 'client2.com' ] } }
   client_3:
     build: *node_build

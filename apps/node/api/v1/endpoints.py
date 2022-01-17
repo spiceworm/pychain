@@ -1,4 +1,5 @@
 import logging
+from typing import Union
 
 from fastapi import Request
 
@@ -11,78 +12,87 @@ from . import router
 
 
 __all__ = (
-    "_broadcast",
     "_is_boot_node",
-    "_my_ip",
+    "_network_join",
     "_peers",
     "_status",
-    "_version",
+    "_sync",
 )
 
 
 log = logging.getLogger(__name__)
 
 
-@router.put("/broadcast")
-async def _broadcast(request: Request):
-    msg = await request.json()
-    log.info("Received message: %s", msg)
-
-    for peer in cache.randomized_peers:
-        peer.broadcast(msg)
-
-    return True
-
-
 @router.get("/is-boot-node")
-async def _is_boot_node():
+async def _is_boot_node() -> bool:
     """
     Returns a response that indicates whether this is a boot node or not.
     """
-    return {"is_boot_node": settings.is_boot_node}
+    return settings.is_boot_node
 
 
-@router.get("/my-ip")
-async def _my_ip(request: Request):
+@router.put("/network/join")
+async def _network_join(request: Request) -> dict:
     """
-    Returns the ip-address of the calling node.
+    Client will send requests to a boot node to join the network. The boot node will assign
+    the sender a GUID, associate that GUID with the sender's address in storage, and return
+    the GUID and the sender's address to the sender. Subsequent calls to this endpoint by a
+    client that has already joined will return the same values as when the sender initially
+    joined. An empty response is returned if this endpoint is invoked on a non-boot node to
+    ensure that GUIDs are assigned correctly.
     """
-    return {"address": request.client.host}
+    sender = Peer(None, request.client.host)
+    retval = {}
+
+    if settings.is_boot_node:
+        guid_address_map = cache.guid_address_map
+        address_guid_map = {addr: guid for guid, addr in guid_address_map.items()}
+        sender.guid = address_guid_map.get(sender.address)
+
+        if sender.guid is None:
+            cache.network_guid += 1
+            sender.guid = cache.network_guid
+            guid_address_map[sender.guid] = sender.address
+            cache.guid_address_map = guid_address_map
+            log.info("%s joined the network", sender)
+        else:
+            log.error("%s has already joined the network", sender)
+
+        retval = {"address": sender.address, "guid": sender.guid}
+    else:
+        log.error("Join request from %s but not a boot node", sender)
+
+    return retval
 
 
-@router.get("/peers")
-async def _peers(request: Request):
+@router.get("/peers/{guid}")
+def _peers(guid: int) -> Union[str, None]:
     """
-    Returns a list of 2-tuples where each tuple corresponds to ("<ip-address>", <port>) for all
-    peers tracked by the current node. Shuffle the peers before iterating over them as an attempt
-    to increase even node tracking distribution across network. We do not want all calls to this
-    endpoint to iterate over the response in the same order each time.
+    Lookup the address of a client by it's GUID using the receiver's storage.
+    Return the address if it is known or None if it is not.
     """
-    peer = Peer(request.client.host)
-
-    if settings.is_boot_node and peer not in cache.peers:
-        log.info("Adding new peer at %s", peer)
-        cache.peers = cache.peers | {peer}
-
-    peers_lst = cache.randomized_peers
-    log.info("%s known peers:", len(peers_lst))
-    for peer in sorted(peers_lst):
-        log.info("    %s", peer)
-
-    return [(p.address, p.port) for p in peers_lst]
+    return cache.guid_address_map.get(guid)
 
 
 @router.get("/status")
 async def _status():
     """
-    Returns an empty response with a response code of 200.
+    Returns a response code of 200 with information about the receiving node.
     """
-    return {}
+    return {
+        "is_boot_node": settings.is_boot_node,
+        "network_guid": cache.network_guid,
+        "version": __version__,
+    }
 
 
-@router.get("/version")
-async def _version():
+@router.post("/sync")
+async def _sync(request: Request) -> int:
     """
-    Returns the version of the pychain package in use by this node.
+    Incoming request includes the sender's highest known GUID for the network.
+    Update the receiver's network GUID to the highest GUID known to the sender
+    and receiver before returning that value.
     """
-    return {"version": __version__}
+    sender = await request.json()
+    cache.network_guid = max(sender["guid"], cache.network_guid)
+    return cache.network_guid

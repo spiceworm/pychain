@@ -2,9 +2,6 @@ import logging
 
 from fastapi import APIRouter
 
-from pychain.node.config import settings
-from pychain.node.storage import cache
-
 
 logging.basicConfig(
     datefmt="%H:%M:%S",
@@ -21,9 +18,7 @@ router = APIRouter()
 
 @router.on_event("startup")
 async def startup() -> None:
-    log.info("Performing startup sequence")
-    cache.peers = settings.dedicated_peers | settings.boot_nodes
-    cache.ignored_peers = settings.ignored_peers
+    log.info("Starting client API")
 
 
 from .endpoints import *
