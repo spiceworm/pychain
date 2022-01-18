@@ -41,14 +41,16 @@ def main() -> None:
                 log.info(
                     "NETWORK JOIN: %s peers=%s",
                     client,
-                    client.compute_peer_guids(),
+                    client.get_peer_guids(),
                 )
             else:
                 log.error("No boot node is configured for client")
         else:
             log.debug("Client is connected to the network")
 
-            for guid in client.compute_peer_guids(cache.network_guid):
+            client = Peer(cache.guid, cache.address)
+
+            for guid in client.get_peer_guids(cache.network_guid):
                 guid_address_map = cache.guid_address_map
                 address = guid_address_map.get(guid)
 
@@ -69,7 +71,7 @@ def main() -> None:
                 "%s: network_guid=%s, peers=%s, guid_address_map=%s",
                 client,
                 cache.network_guid,
-                client.compute_peer_guids(cache.network_guid),
+                client.get_peer_guids(cache.network_guid),
                 [*cache.guid_address_map.keys()]
             )
     else:

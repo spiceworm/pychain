@@ -29,6 +29,16 @@ class _Cache:
         self._redis.set("guid", int(value))
 
     @property
+    def message_id_count(self) -> int:
+        if count := self._redis.get("message_id_count"):
+            return int(count)
+        return 0
+
+    @message_id_count.setter
+    def message_id_count(self, value: int) -> None:
+        self._redis.set("message_id_count", int(value))
+
+    @property
     def guid_address_map(self) -> Dict[int, str]:
         if data := self._redis.get("guid_address_map"):
             retval = pickle.loads(data)

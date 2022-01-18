@@ -56,3 +56,24 @@ For testing purposes, create a "beacon" node that all nodes alert when a message
 
 Configure logrotate
 ```
+
+### Message Broadcasting
+```python
+import aiohttp, asyncio
+from pychain.node.models import Message, Peer
+from pychain.node.storage import cache
+
+async def main():
+    cache.message_id_count += 1
+
+    async with aiohttp.ClientSession() as session:
+        client = Peer(cache.guid, cache.address)
+        msg = Message(
+            body="test",
+            id=cache.message_id_count,
+            originator=client,
+        )
+        await client.broadcast(msg, session)
+
+asyncio.run(main())
+```

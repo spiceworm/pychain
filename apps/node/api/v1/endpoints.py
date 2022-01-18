@@ -1,17 +1,21 @@
 import logging
+import time
 from typing import Union
 
+import aiohttp
+import asyncio
 from fastapi import Request
 
 from pychain.__version__ import __version__
 from pychain.node.config import settings
-from pychain.node.models import Peer
+from pychain.node.models import Message, Peer
 from pychain.node.storage import cache
 
 from . import router
 
 
 __all__ = (
+    "_broadcast",
     "_is_boot_node",
     "_network_join",
     "_peers",
@@ -21,6 +25,41 @@ __all__ = (
 
 
 log = logging.getLogger(__name__)
+
+
+@router.put("/broadcast")
+async def _broadcast(request: Request):
+    msg_dct = await request.json()
+
+    guid = msg_dct["originator"]["guid"]
+    address = msg_dct["originator"]["address"]
+    msg_dct["originator"] = Peer(guid, address)
+    message = Message(**msg_dct)
+
+    client = Peer(cache.guid, cache.address)
+
+    if message.originator.address == cache.address and message.broadcast_timestamp is None:
+        message.broadcast_timestamp = time.time()
+        log.info("Client of origin broadcasting %s", message)
+        should_broadcast = True
+    elif message.id > cache.message_id_count:
+        cache.message_id_count = message.id
+        log.info("Received new %s", message)
+        should_broadcast = True
+    else:
+        log.debug("Ignoring duplicate %s", message)
+        should_broadcast = False
+
+    session = aiohttp.ClientSession()
+    if should_broadcast:
+        coroutines = [
+            p.broadcast(message, session)
+            for p in client.get_peers(cache.network_guid)
+        ]
+        await asyncio.gather(*coroutines)
+    if not session.closed:
+        await session.close()
+    return should_broadcast
 
 
 @router.get("/is-boot-node")

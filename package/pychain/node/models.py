@@ -4,17 +4,44 @@ import logging
 import socket
 from typing import Generator, List, Union
 
+from aiohttp import ClientResponse, ClientSession
 import requests
 
 from .exceptions import NetworkJoinException
 
 
 __all__ = (
+    "Message",
     "Peer",
 )
 
 
 log = logging.getLogger(__file__)
+
+
+class Message:
+    def __init__(self, body: int, id: int, originator: Peer, broadcast_timestamp: None = None):
+        self.body = body
+        self.broadcast_timestamp = broadcast_timestamp
+        self.id = id
+        self.originator = originator
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}("
+            f"body={self.body}, "
+            f"id={self.id}, "
+            f"originator={repr(self.originator)}, "
+            f"broadcast_timestamp={self.broadcast_timestamp})"
+        )
+
+    def as_dict(self) -> dict:
+        return {
+            'body': self.body,
+            'broadcast_timestamp': self.broadcast_timestamp,
+            'id': self.id,
+            'originator': self.originator.as_dict(),
+        }
 
 
 @functools.total_ordering
@@ -46,9 +73,17 @@ class Peer:
     def as_dict(self) -> dict:
         return {
             'address': self.address,
+            'guid': self.guid,
         }
 
-    def compute_peer_guids(self, network_size: int = None) -> List[int]:
+    async def broadcast(self, message: Message, session: ClientSession) -> ClientResponse:
+        url = f"http://{self.address}/api/v1/broadcast"
+        return await session.put(url, json=message.as_dict())
+
+    def get_peer_address(self, guid: int) -> str:
+        return self._send(requests.get, f"/api/v1/peers/{guid}")
+
+    def get_peer_guids(self, network_size: int = None) -> List[int]:
         """
         :param network_size: Total number of nodes in the network. If not provided, assume
             that `n` is the highest GUID in the network and represents network size.
@@ -79,8 +114,12 @@ class Peer:
             distance *= 2
         return peer_guids
 
-    def get_peer_address(self, guid: int) -> str:
-        return self._send(requests.get, f"/api/v1/peers/{guid}")
+    def get_peers(self, network_size: Union[int, None] = None) -> Generator[Peer, None, None]:
+        for guid in self.get_peer_guids(network_size):
+            if address := self.get_peer_address(guid):
+                yield Peer(guid, address)
+            else:
+                log.warning("Do not have address entry for %s yet", guid)
 
     def is_alive(self) -> bool:
         try:
