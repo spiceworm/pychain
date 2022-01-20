@@ -58,6 +58,29 @@ For testing purposes, create a "beacon" node that all nodes alert when a message
   propogated to the entire network and how long it took for all nodes to see it.
 
 Configure logrotate
+
+Broadcast message when a peer is leaving the network
+- Handle special message types (events)
+
+Come up with a better GUID storage solution. If a node shuts down and starts up
+  again it should reuse it's old GUID.
+
+Nodes should associate a timestamp with peer GUIDs. That timestamp should get
+  updated each time the corresponding peer is responsive. If a client has not
+  heard from a peer with a certain GUID after some time, it should delete all
+  saved records associated with that GUID (such as peer IP address)
+
+Authenticate requests between clients so that a malicious node is not able to
+  call endpoints such as /network/join and provide a GUID that is in use by an
+  existing client.
+
+Mitigate sybil attack where attacker could have several client join and then leave.
+  The existing nodes will still attempt to contact those nodes until their GUID
+  timeout interval was hit. A valid client would waste a ton of time waiting for
+  the requests to timeout to these malicious nodes.
+
+Handle case where boot node goes down. It will need to remember the GUIDs it has
+  allocated previously.
 ```
 
 ### Message Broadcasting
