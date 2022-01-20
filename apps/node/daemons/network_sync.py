@@ -1,12 +1,11 @@
 import logging
 import random
-import time
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from pychain.node.config import settings
 from pychain.node.models import Peer
-from pychain.node.storage import cache
+from pychain.node.storage.cache import cache
 
 
 logging.basicConfig(
@@ -25,55 +24,36 @@ log = logging.getLogger(__file__)
 
 def main() -> None:
     """ """
-    while not Peer(cache.guid, "127.0.0.1").is_alive():
-        log.info("Waiting for local API service to be responsive")
-        time.sleep(1)
-
     if not settings.is_boot_node:
-        boot_node = settings.boot_node
-
-        if cache.guid is None:
-            if boot_node:
-                log.debug("Sending request to %s to join network", boot_node)
-                client = boot_node.join_network()
-                cache.address, cache.guid = client.address, client.guid
-                cache.network_guid = cache.guid
-                log.info(
-                    "NETWORK JOIN: %s peers=%s",
-                    client,
-                    client.get_peer_guids(),
-                )
+        if not cache.address:
+            if cache.guid is None:
+                log.info("Sending join request to %s", settings.boot_node.address)
             else:
-                log.error("No boot node is configured for client")
+                log.info("Sending re-join request to %s using %s", settings.boot_node.address, cache.guid)
+
+            client = settings.boot_node.join_network(cache.guid)
+            cache.guid_map[client.guid] = cache.address = client.address
+            cache.network_guid = cache.guid = client.guid
+            log.info("Joined network as %s", client)
         else:
-            log.debug("Client is connected to the network")
-
             client = Peer(cache.guid, cache.address)
+            log.info("Connected to network as %s", client)
 
-            for guid in client.get_peer_guids(cache.network_guid):
-                guid_address_map = cache.guid_address_map
-                address = guid_address_map.get(guid)
+            peers = client.get_peers(cache.guid_map, cache.network_guid, settings.boot_node)
 
-                if address is None:
-                    # TODO: attempt to resolve address from peers before using boot node
-                    address = boot_node.get_peer_address(guid)
-                    log.debug("Boot node resolved guid %s to %s", guid, address)
-                    guid_address_map[guid] = address
-                    cache.guid_address_map = guid_address_map
-                else:
-                    log.debug("Storage resolved guid %s to %s", guid, address)
+            for peer in peers:
+                highest_guid_known_to_client = max(cache.guid, cache.network_guid)
+                cache.network_guid = peer.sync(highest_guid_known_to_client)
 
-                cache.network_guid = Peer(guid, address).sync(
-                    max(cache.guid, cache.network_guid)
-                )
-
-            log.info(
-                "%s: network_guid=%s, peers=%s, guid_address_map=%s",
-                client,
-                cache.network_guid,
-                client.get_peer_guids(cache.network_guid),
-                [*cache.guid_address_map.keys()]
-            )
+            log.info("SYNC COMPLETE")
+            log.info("  client: %s", client)
+            log.info("  network_guid: %s", cache.network_guid)
+            log.info("  peers:")
+            for peer in peers:
+                log.info("    %s", peer)
+            log.info("  guid_map:")
+            for guid, address in cache.guid_map.items():
+                log.info("    %s:%s", guid, address)
     else:
         log.info("Boot nodes do not perform peer discovery")
 

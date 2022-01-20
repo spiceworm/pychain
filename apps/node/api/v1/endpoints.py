@@ -6,10 +6,9 @@ import aiohttp
 import asyncio
 from fastapi import Request
 
-from pychain.__version__ import __version__
 from pychain.node.config import settings
-from pychain.node.models import Message, Peer
-from pychain.node.storage import cache
+from pychain.node.models import GUID, Message, Peer
+from pychain.node.storage.cache import cache
 
 from . import router
 
@@ -38,7 +37,11 @@ async def _broadcast(request: Request):
 
     client = Peer(cache.guid, cache.address)
 
-    if message.originator.address == cache.address and message.broadcast_timestamp is None:
+    if all([
+        message.originator.guid == cache.guid,
+        message.originator.address == cache.address,
+        message.broadcast_timestamp is None
+    ]):
         message.broadcast_timestamp = time.time()
         log.info("Client of origin broadcasting %s", message)
         should_broadcast = True
@@ -54,7 +57,7 @@ async def _broadcast(request: Request):
     if should_broadcast:
         coroutines = [
             p.broadcast(message, session)
-            for p in client.get_peers(cache.network_guid)
+            for p in client.get_peers(cache.network_guid)  # TODO, update this for the net get_peers method signature
         ]
         await asyncio.gather(*coroutines)
     if not session.closed:
@@ -80,37 +83,61 @@ async def _network_join(request: Request) -> dict:
     joined. An empty response is returned if this endpoint is invoked on a non-boot node to
     ensure that GUIDs are assigned correctly.
     """
-    sender = Peer(None, request.client.host)
     retval = {}
+    sender_address = request.client.host
 
     if settings.is_boot_node:
-        guid_address_map = cache.guid_address_map
-        address_guid_map = {addr: guid for guid, addr in guid_address_map.items()}
-        sender.guid = address_guid_map.get(sender.address)
+        address_map = {addr: guid for guid, addr in cache.guid_map.items()}
 
-        if sender.guid is None:
-            cache.network_guid += 1
-            sender.guid = cache.network_guid
-            guid_address_map[sender.guid] = sender.address
-            cache.guid_address_map = guid_address_map
+        data = await request.json()
+
+        if "guid" in data:
+            # Sender is attempting to re-join the network using a GUID included in their request
+            guid_id = int(data["guid"])
+            guid = GUID(guid_id)
+
+            if guid in cache.guid_map:
+                sender = Peer(guid, sender_address)
+                cache.guid_map[sender.guid] = sender.address
+                log.info("%s re-joined the network using previously allocated %s", sender, sender.guid)
+            else:
+                log.error(
+                    "%(address)s attempting to re-join network as %s, but %(guid)s was never allocated",
+                    {'address': sender_address, 'guid': guid},
+                )
+                return retval
+        elif sender_address not in address_map:
+            # Sender is joining the network for the first time
+            if cache.network_guid is None:
+                # This is the first client to join the network
+                cache.network_guid = GUID(0)
+            else:
+                cache.network_guid = GUID(int(cache.network_guid) + 1)
+
+            sender = Peer(cache.network_guid, sender_address)
+            cache.guid_map[sender.guid] = sender.address
             log.info("%s joined the network", sender)
         else:
+            # Sender already joined the network and invoked this endpoint for no reason
+            guid = address_map[sender_address]
+            sender = Peer(guid, sender_address)
             log.error("%s has already joined the network", sender)
 
-        retval = {"address": sender.address, "guid": sender.guid}
+        retval = {"address": sender.address, "guid": int(sender.guid)}
     else:
-        log.error("Join request from %s but not a boot node", sender)
+        log.error("Join request from %s but this client is not a boot node", sender_address)
 
     return retval
 
 
-@router.get("/peers/{guid}")
-def _peers(guid: int) -> Union[str, None]:
+@router.get("/peers/{guid_id}")
+def _peers(guid_id: int) -> Union[str, None]:
     """
     Lookup the address of a client by it's GUID using the receiver's storage.
     Return the address if it is known or None if it is not.
     """
-    return cache.guid_address_map.get(guid)
+    guid = GUID(guid_id)
+    return cache.guid_map.get(guid)
 
 
 @router.get("/status")
@@ -120,8 +147,6 @@ async def _status():
     """
     return {
         "is_boot_node": settings.is_boot_node,
-        "network_guid": cache.network_guid,
-        "version": __version__,
     }
 
 
@@ -133,5 +158,14 @@ async def _sync(request: Request) -> int:
     and receiver before returning that value.
     """
     sender = await request.json()
-    cache.network_guid = max(sender["guid"], cache.network_guid)
-    return cache.network_guid
+
+    if cache.network_guid is None:
+        # Client may have shut down after already joining the network previously.
+        # If a peer invokes this endpoint before network_sync.py runs, then
+        # `cache.network_guid` will be None. At this point, the sender invoking
+        # this endpoint would be the highest GUID known to this client.
+        cache.network_guid = GUID(sender["guid"])
+    else:
+        cache.network_guid = max(GUID(sender["guid"]), cache.network_guid)
+
+    return int(cache.network_guid)
