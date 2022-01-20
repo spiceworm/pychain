@@ -12,6 +12,7 @@ from .storage.redis_dict import RedisDict
 
 
 __all__ = (
+    "DeadPeer",
     "GUID",
     "Message",
     "Peer",
@@ -167,31 +168,6 @@ class GUID:
         return peer_guids
 
 
-class Message:
-    def __init__(self, body: int, id: int, originator: Peer, broadcast_timestamp: None = None):
-        self.body = body
-        self.broadcast_timestamp = broadcast_timestamp
-        self.id = id
-        self.originator = originator
-
-    def __repr__(self) -> str:
-        return (
-            f"{self.__class__.__name__}("
-            f"body={self.body}, "
-            f"id={self.id}, "
-            f"originator={repr(self.originator)}, "
-            f"broadcast_timestamp={self.broadcast_timestamp})"
-        )
-
-    def as_dict(self) -> dict:
-        return {
-            "body": self.body,
-            "broadcast_timestamp": self.broadcast_timestamp,
-            "id": self.id,
-            "originator": self.originator.as_dict(),
-        }
-
-
 @functools.total_ordering
 class Peer:
     def __init__(self, guid: Union[GUID, None], address: Union[str, None]):
@@ -214,15 +190,17 @@ class Peer:
     def __str__(self) -> str:
         return repr(self)
 
-    def as_dict(self) -> dict:
+    def as_json(self) -> dict:
         return {
             "address": self.address,
-            "guid": self.guid,  # TODO: convert this to an int?
+            "guid": int(self.guid),
         }
 
     async def broadcast(self, message: Message, session: ClientSession) -> ClientResponse:
+        if message.originator is None:
+            message.originator = self
         url = f"http://{self.address}/api/v1/broadcast"
-        return await session.put(url, json=message.as_dict())
+        return await session.put(url, json=message.as_json())
 
     def get_peers(self, guid_map: RedisDict, guid_max: GUID, boot_node: Peer) -> List[Peer]:
         """
@@ -349,3 +327,51 @@ class Peer:
     def sync(self, guid: GUID) -> GUID:
         guid_id = self._send(requests.post, "/api/v1/sync", json={"guid": int(guid)})
         return GUID(guid_id)
+
+
+class Message:
+    def __init__(
+        self,
+        data: dict,
+        id: Union[int, None] = None,
+        originator: Union[Peer, None] = None,
+        broadcast_timestamp: Union[float, None] = None,
+    ):
+        self.data = data
+        self.broadcast_timestamp = broadcast_timestamp
+        self.id = id
+        self.originator = originator
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}("
+            f"data={self.data}, "
+            f"id={self.id}, "
+            f"originator={repr(self.originator)}, "
+            f"broadcast_timestamp={self.broadcast_timestamp})"
+        )
+
+    def as_json(self) -> dict:
+        return {
+            "data": self.data,
+            "broadcast_timestamp": self.broadcast_timestamp,
+            "id": self.id,
+            "originator": self.originator.as_json(),
+        }
+
+
+class DeadPeer(Message):
+    def __init__(
+        self,
+        guid: GUID,
+        id: Union[int, None] = None,
+        originator: Union[Peer, None] = None,
+        broadcast_timestamp: Union[float, None] = None,
+    ):
+        data = {
+            "event": {
+                "name": "DEAD_PEER",
+                "guid": int(guid),
+            },
+        }
+        super().__init__(data, id, originator, broadcast_timestamp)

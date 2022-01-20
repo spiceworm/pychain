@@ -29,9 +29,9 @@ log = logging.getLogger(__name__)
 @router.put("/broadcast")
 async def _broadcast(request: Request):
     msg_dct = await request.json()
-
-    guid = msg_dct["originator"]["guid"]
+    guid_id = msg_dct["originator"]["guid"]
     address = msg_dct["originator"]["address"]
+    guid = GUID(guid_id)
     msg_dct["originator"] = Peer(guid, address)
     message = Message(**msg_dct)
 
@@ -39,11 +39,13 @@ async def _broadcast(request: Request):
 
     if all(
         [
-            message.originator.guid == cache.guid,
-            message.originator.address == cache.address,
+            message.originator == client,
             message.broadcast_timestamp is None,
+            message.id is None,
         ]
     ):
+        cache.message_id_count += 1
+        message.id = cache.message_id_count
         message.broadcast_timestamp = time.time()
         log.info("Client of origin broadcasting %s", message)
         should_broadcast = True
@@ -52,13 +54,15 @@ async def _broadcast(request: Request):
         log.info("Received new %s", message)
         should_broadcast = True
     else:
-        log.debug("Ignoring duplicate %s", message)
+        log.debug("%s ignored. ID indicates it is old or a duplicate", message)
         should_broadcast = False
 
     session = aiohttp.ClientSession()
     if should_broadcast:
-        # TODO, update this for the net get_peers method signature
-        coroutines = [p.broadcast(message, session) for p in client.get_peers(cache.network_guid)]
+        coroutines = [
+            p.broadcast(message, session)
+            for p in client.get_peers(cache.guid_map, cache.network_guid, settings.boot_node)
+        ]
         await asyncio.gather(*coroutines)
     if not session.closed:
         await session.close()

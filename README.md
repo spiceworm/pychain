@@ -93,21 +93,27 @@ Handle case where boot node goes down. It will need to remember the GUIDs it has
 
 ### Message Broadcasting
 ```python
+# Run this from within a client container.
+# Make sure network_sync.py has run a few times by tailing the logs.
+# Otherwise the client will not know any peers to sent the message to.
+# If it has not ran a single time yet, the client will not even know
+# it's own GUID and address.
+
 import aiohttp, asyncio
-from pychain.node.models import Message, Peer
-from pychain.node.storage import cache
+from pychain.node.models import DeadPeer, GUID, Message, Peer
+from pychain.node.storage.cache import cache
+
 
 async def main():
-    cache.message_id_count += 1
-
     async with aiohttp.ClientSession() as session:
-        client = Peer(cache.guid, cache.address)
-        msg = Message(
-            body="test",
-            id=cache.message_id_count,
-            originator=client,
-        )
-        await client.broadcast(msg, session)
+        msg1 = Message({"event": "something", "args": [1], "kwargs": {2: 3}})
+        resp1 = await Peer(cache.guid, cache.address).broadcast(msg1, session)
+        resp1.raise_for_status()
+
+        msg2 = DeadPeer(GUID(123))
+        resp2 = await Peer(cache.guid, cache.address).broadcast(msg2, session)
+        resp2.raise_for_status()
+
 
 asyncio.run(main())
 ```
