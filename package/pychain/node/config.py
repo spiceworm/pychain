@@ -22,6 +22,11 @@ class _Settings:
         return "BOOT_NODE" not in os.environ
 
     @property
+    def log_dir(self) -> Path:
+        s = os.getenv("LOG_DIR", "/var/log/pychain")
+        return Path(s)
+
+    @property
     def network_sync_interval(self) -> int:
         return int(os.getenv("NETWORK_SYNC_INTERVAL", "60"))
 

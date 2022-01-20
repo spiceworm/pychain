@@ -13,7 +13,7 @@ logging.basicConfig(
     format="%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s",
     level=logging.INFO,
     handlers=[
-        logging.FileHandler("/var/log/pychain/network_sync.log"),
+        logging.FileHandler(settings.log_dir / "network_sync.log"),
     ],
 )
 # Suppress apscheduler log messages

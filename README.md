@@ -9,6 +9,9 @@
     provided, a randomly selected subset of `MAX_BOOT_NODES` will be used.
   * Example config: `BOOT_NODES=<URL or IP-address>,[<URL or IP-address>]`
 
+* `LOG_DIR` (optional, default: /var/log/pychain)
+  * Filesystem directory where logs will be written
+
 * `NETWORK_SYNC_INTERVAL` (optional, default: 60)
   * How many seconds should elapse between executions of network_scan.py.
 
