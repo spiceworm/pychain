@@ -1,5 +1,6 @@
 import logging
 import os
+from pathlib import Path
 
 from pychain.node.models import Peer
 
@@ -23,6 +24,11 @@ class _Settings:
     @property
     def network_sync_interval(self) -> int:
         return int(os.getenv("NETWORK_SYNC_INTERVAL", "60"))
+
+    @property
+    def storage_dir(self) -> Path:
+        s = os.getenv("STORAGE_DIR", "/usr/local/etc/pychain")
+        return Path(s)
 
 
 settings = _Settings()

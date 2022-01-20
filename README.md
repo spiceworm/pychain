@@ -12,6 +12,9 @@
 * `NETWORK_SYNC_INTERVAL` (optional, default: 60)
   * How many seconds should elapse between executions of network_scan.py.
 
+* `STORAGE_DIR` (optional, default: /usr/local/etc/pychain)
+  * Filesystem directory where data will be written
+
 ## Development Environment
 ```bash
 $ docker-compose up --build
