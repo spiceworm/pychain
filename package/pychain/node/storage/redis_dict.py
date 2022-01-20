@@ -5,9 +5,7 @@ import pickle
 from redis import Redis
 
 
-__all__ = (
-    "RedisDict",
-)
+__all__ = ("RedisDict",)
 
 
 class RedisDict(MutableMapping):

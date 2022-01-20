@@ -37,11 +37,13 @@ async def _broadcast(request: Request):
 
     client = Peer(cache.guid, cache.address)
 
-    if all([
-        message.originator.guid == cache.guid,
-        message.originator.address == cache.address,
-        message.broadcast_timestamp is None
-    ]):
+    if all(
+        [
+            message.originator.guid == cache.guid,
+            message.originator.address == cache.address,
+            message.broadcast_timestamp is None,
+        ]
+    ):
         message.broadcast_timestamp = time.time()
         log.info("Client of origin broadcasting %s", message)
         should_broadcast = True
@@ -55,10 +57,8 @@ async def _broadcast(request: Request):
 
     session = aiohttp.ClientSession()
     if should_broadcast:
-        coroutines = [
-            p.broadcast(message, session)
-            for p in client.get_peers(cache.network_guid)  # TODO, update this for the net get_peers method signature
-        ]
+        # TODO, update this for the net get_peers method signature
+        coroutines = [p.broadcast(message, session) for p in client.get_peers(cache.network_guid)]
         await asyncio.gather(*coroutines)
     if not session.closed:
         await session.close()
@@ -76,12 +76,12 @@ async def _is_boot_node() -> bool:
 @router.put("/network/join")
 async def _network_join(request: Request) -> dict:
     """
-    Client will send requests to a boot node to join the network. The boot node will assign
-    the sender a GUID, associate that GUID with the sender's address in storage, and return
-    the GUID and the sender's address to the sender. Subsequent calls to this endpoint by a
-    client that has already joined will return the same values as when the sender initially
-    joined. An empty response is returned if this endpoint is invoked on a non-boot node to
-    ensure that GUIDs are assigned correctly.
+    Client will send requests to a boot node to join the network. The boot node will
+    assign the sender a GUID, associate that GUID with the sender's address in storage,
+    and return the GUID and the sender's address to the sender. Subsequent calls to
+    this endpoint by a client that has already joined will return the same values as
+    when the sender initially joined. An empty response is returned if this endpoint is
+    invoked on a non-boot node to ensure that GUIDs are assigned correctly.
     """
     retval = {}
     sender_address = request.client.host
@@ -92,18 +92,24 @@ async def _network_join(request: Request) -> dict:
         data = await request.json()
 
         if "guid" in data:
-            # Sender is attempting to re-join the network using a GUID included in their request
+            # Sender is attempting to re-join the network using a GUID
+            # included in their request
             guid_id = int(data["guid"])
             guid = GUID(guid_id)
 
             if guid in cache.guid_map:
                 sender = Peer(guid, sender_address)
                 cache.guid_map[sender.guid] = sender.address
-                log.info("%s re-joined the network using previously allocated %s", sender, sender.guid)
+                log.info(
+                    "%s re-joined the network using previously allocated %s",
+                    sender,
+                    sender.guid,
+                )
             else:
                 log.error(
-                    "%(address)s attempting to re-join network as %s, but %(guid)s was never allocated",
-                    {'address': sender_address, 'guid': guid},
+                    "%(address)s attempting to re-join network as %s, "
+                    "but %(guid)s was never allocated",
+                    {"address": sender_address, "guid": guid},
                 )
                 return retval
         elif sender_address not in address_map:

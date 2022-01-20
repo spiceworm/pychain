@@ -29,7 +29,11 @@ def main() -> None:
             if cache.guid is None:
                 log.info("Sending join request to %s", settings.boot_node.address)
             else:
-                log.info("Sending re-join request to %s using %s", settings.boot_node.address, cache.guid)
+                log.info(
+                    "Sending re-join request to %s using %s",
+                    settings.boot_node.address,
+                    cache.guid,
+                )
 
             client = settings.boot_node.join_network(cache.guid)
             cache.guid_map[client.guid] = cache.address = client.address

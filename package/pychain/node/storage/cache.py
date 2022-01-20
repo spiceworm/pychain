@@ -10,9 +10,7 @@ from ..config import settings
 from ..models import GUID
 
 
-__all__ = (
-    "cache",
-)
+__all__ = ("cache",)
 
 
 log = logging.getLogger(__file__)
@@ -40,7 +38,7 @@ class Cache:
         """
         if data := self._redis.get("guid"):
             return pickle.loads(data)
-        elif (guid_path := settings.storage_dir / 'guid').is_file():
+        elif (guid_path := settings.storage_dir / "guid").is_file():
             log.info("Reading GUID from %s", guid_path)
             with guid_path.open() as f:
                 data = f.read().strip()
@@ -50,9 +48,9 @@ class Cache:
 
     @guid.setter
     def guid(self, value: GUID):
-        if not (guid_path := settings.storage_dir / 'guid').is_file():
+        if not (guid_path := settings.storage_dir / "guid").is_file():
             log.info("Writing %s to %s", value, guid_path)
-            with guid_path.open('w') as f:
+            with guid_path.open("w") as f:
                 f.write(str(value))
 
         self._redis.set("guid", pickle.dumps(value))
@@ -62,7 +60,7 @@ class Cache:
         """
         GUID to IP address mapping.
         """
-        return RedisDict('guid_map', connection=self._redis)
+        return RedisDict("guid_map", connection=self._redis)
 
     @property
     def message_id_count(self) -> int:

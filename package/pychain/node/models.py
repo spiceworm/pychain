@@ -83,8 +83,8 @@ class GUID:
         start_idx = network.index(start_guid)
         stop_idx = network.index(stop_guid)
         if stop_idx > start_idx:
-            return network[start_idx + 1: stop_idx]
-        return network[start_idx + 1:]
+            return network[start_idx + 1 : stop_idx]
+        return network[start_idx + 1 :]
 
     def _get_network(self, guid_max: GUID) -> List[GUID]:
         """
@@ -179,10 +179,10 @@ class Message:
 
     def as_dict(self) -> dict:
         return {
-            'body': self.body,
-            'broadcast_timestamp': self.broadcast_timestamp,
-            'id': self.id,
-            'originator': self.originator.as_dict(),
+            "body": self.body,
+            "broadcast_timestamp": self.broadcast_timestamp,
+            "id": self.id,
+            "originator": self.originator.as_dict(),
         }
 
 
@@ -210,8 +210,8 @@ class Peer:
 
     def as_dict(self) -> dict:
         return {
-            'address': self.address,
-            'guid': self.guid,  # TODO: convert this to an int?
+            "address": self.address,
+            "guid": self.guid,  # TODO: convert this to an int?
         }
 
     async def broadcast(self, message: Message, session: ClientSession) -> ClientResponse:
@@ -272,14 +272,17 @@ class Peer:
                         log.info("%s: Responsive peer found after boot node lookup", peer)
                         peers.append(peer)
                     else:
-                        log.info("%s: Unresponsive peer detected after boot node lookup", peer)
+                        log.info(
+                            "%s: Unresponsive peer detected after boot node lookup",
+                            peer,
+                        )
                 else:
                     log.error(
                         "Could not lookup address for GUID %s using boot node. This "
                         "should never happen because we should never be touching GUIDs "
                         "that the boot node did not hand out and is therefore knows "
                         "the associated address for.",
-                        peer.guid
+                        peer.guid,
                     )
 
         while unaddressed_backup_peers:
@@ -291,14 +294,17 @@ class Peer:
                         log.info("%s: Responsive backup found after boot node lookup", peer)
                         peers.append(peer)
                     else:
-                        log.info("%s: Unresponsive backup detected after boot node lookup", peer)
+                        log.info(
+                            "%s: Unresponsive backup detected after boot node lookup",
+                            peer,
+                        )
                 else:
                     log.error(
                         "Could not lookup address for GUID %s using boot node. This "
                         "should never happen because we should never be touching GUIDs "
                         "that the boot node did not hand out and is therefore knows "
                         "the associated address for.",
-                        peer.guid
+                        peer.guid,
                     )
 
         return peers
