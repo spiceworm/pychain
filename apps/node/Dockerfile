@@ -13,8 +13,12 @@ RUN apt-get update \
     && apt-get clean \
     && rm -Rf /var/lib/apt/lists/*
 
+# TODO: remove IPython once it is no longer needed for development purposes
 RUN pip install --upgrade pip \
-    && pip install uvicorn[standard]
+    && pip install  \
+        IPython \
+        tox \
+        uvicorn[standard]
 
 COPY ./apps/node/requirements.txt /tmp/
 RUN pip install -r /tmp/requirements.txt \
@@ -22,9 +26,6 @@ RUN pip install -r /tmp/requirements.txt \
 
 COPY ./package /pychain
 RUN pip install /pychain
-
-# TODO: remove this once it is no longer needed for development purposes
-RUN pip install IPython
 
 COPY ./apps/node /app
 

@@ -27,6 +27,11 @@ $ docker exec -it pychain_client_1_1 tail -f /var/log/pychain/{api,network_sync}
 $ docker exec -it pychain_boot_1_1 tail -f /var/log/pychain/{api,network_sync}.log
 ```
 
+## Tests
+```bash
+$ docker-compose -f test.yml up --build
+```
+
 ## Architecture
 ```
 Each node is running
