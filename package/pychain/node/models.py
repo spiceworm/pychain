@@ -7,7 +7,7 @@ from typing import List, Union
 from aiohttp import ClientResponse, ClientSession
 import requests
 
-from .exceptions import NetworkJoinException
+from .exceptions import GUIDNotInNetwork, NetworkJoinException
 from .storage.redis_dict import RedisDict
 
 
@@ -76,12 +76,18 @@ class GUID:
         >>> GUID(9).get_backup_peers(GUID(1), GUID(9), GUID(9))
         [GUID(id=0)]
         """
-        # TODO: raise custom exception if start_guid or stop_guid are values that do not exist in
-        # the network.
-
         network = self._get_network(guid_max)
-        start_idx = network.index(start_guid)
-        stop_idx = network.index(stop_guid)
+
+        try:
+            start_idx = network.index(start_guid)
+        except ValueError:
+            raise GUIDNotInNetwork(start_guid)
+
+        try:
+            stop_idx = network.index(stop_guid)
+        except ValueError:
+            raise GUIDNotInNetwork(stop_guid)
+
         if stop_idx > start_idx:
             return network[start_idx + 1 : stop_idx]
         return network[start_idx + 1 :]

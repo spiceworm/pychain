@@ -1,5 +1,6 @@
 import pytest
 
+from pychain.node.exceptions import GUIDNotInNetwork
 from pychain.node.models import GUID
 
 
@@ -43,6 +44,18 @@ def test_guid_str():
 )
 def test_guid_get_backup_peers(guid, start_guid, stop_guid, guid_max, expected):
     assert guid.get_backup_peers(start_guid, stop_guid, guid_max) == expected
+
+
+@pytest.mark.parametrize(
+    "guid,start_guid,stop_guid,guid_max",
+    [
+        (GUID(0), GUID(2), GUID(4), GUID(3)),
+        (GUID(0), GUID(4), GUID(2), GUID(3)),
+    ],
+)
+def test_guid_get_backup_peers_not_in_network(guid, start_guid, stop_guid, guid_max):
+    with pytest.raises(GUIDNotInNetwork):
+        guid.get_backup_peers(start_guid, stop_guid, guid_max)
 
 
 @pytest.mark.parametrize(
