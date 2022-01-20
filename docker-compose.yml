@@ -2,91 +2,68 @@ version: "3.7"
 services:
   boot_1:
     build: &node_build { 'context': '.', 'dockerfile': './apps/node/Dockerfile' }
-    networks: { 'default': { 'aliases': ['boot1.com'] } }
+    networks: { 'default': { 'aliases': ['boot.com'] } }
 
   client_1:
     build: *node_build
-    environment: &client_env { 'BOOT_NODE': 'boot1.com' }
-    networks: { 'default': { 'aliases': [ 'client1.com' ] } }
+    environment: &client_env { 'BOOT_NODE': 'boot.com' }
   client_2:
     build: *node_build
     environment: *client_env
-    networks: { 'default': { 'aliases': [ 'client2.com' ] } }
   client_3:
     build: *node_build
     environment: *client_env
-    networks: { 'default': { 'aliases': [ 'client3.com' ] } }
   client_4:
     build: *node_build
     environment: *client_env
-    networks: { 'default': { 'aliases': [ 'client4.com' ] } }
   client_5:
     build: *node_build
     environment: *client_env
-    networks: { 'default': { 'aliases': [ 'client5.com' ] } }
   client_6:
     build: *node_build
     environment: *client_env
-    networks: { 'default': { 'aliases': [ 'client6.com' ] } }
   client_7:
     build: *node_build
     environment: *client_env
-    networks: { 'default': { 'aliases': [ 'client7.com' ] } }
   client_8:
     build: *node_build
     environment: *client_env
-    networks: { 'default': { 'aliases': [ 'client8.com' ] } }
   client_9:
     build: *node_build
     environment: *client_env
-    networks: { 'default': { 'aliases': [ 'client9.com' ] } }
   client_10:
     build: *node_build
     environment: *client_env
-    networks: { 'default': { 'aliases': [ 'client10.com' ] } }
   client_11:
     build: *node_build
     environment: *client_env
-    networks: { 'default': { 'aliases': [ 'client11.com' ] } }
   client_12:
     build: *node_build
     environment: *client_env
-    networks: { 'default': { 'aliases': [ 'client12.com' ] } }
   client_13:
     build: *node_build
     environment: *client_env
-    networks: { 'default': { 'aliases': [ 'client13.com' ] } }
   client_14:
     build: *node_build
     environment: *client_env
-    networks: { 'default': { 'aliases': [ 'client14.com' ] } }
   client_15:
     build: *node_build
     environment: *client_env
-    networks: { 'default': { 'aliases': [ 'client15.com' ] } }
   client_16:
     build: *node_build
     environment: *client_env
-    networks: { 'default': { 'aliases': [ 'client16.com' ] } }
   client_17:
     build: *node_build
     environment: *client_env
-    networks: { 'default': { 'aliases': [ 'client17.com' ] } }
   client_18:
     build: *node_build
     environment: *client_env
-    networks: { 'default': { 'aliases': [ 'client18.com' ] } }
   client_19:
     build: *node_build
     environment: *client_env
-    networks: { 'default': { 'aliases': [ 'client19.com' ] } }
   client_20:
     build: *node_build
     environment: *client_env
-    networks: { 'default': { 'aliases': [ 'client20.com' ] } }
-
-
-
 
 
 #  staker:

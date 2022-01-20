@@ -3,7 +3,11 @@ services:
   boot_1:
     build: { 'context': '.', 'dockerfile': './apps/node/Dockerfile' }
     networks: { 'default': { 'aliases': ['boot.com'] } }
+    volumes:
+      - /usr/local/etc/pychain/boot_1:/usr/local/etc/pychain
 
   client_1:
-    build: { 'context': '.', 'dockerfile': './apps/node/Dockerfile' }
-    environment: { 'BOOT_NODE': 'boot.com' }
+    build: &build { 'context': '.', 'dockerfile': './apps/node/Dockerfile' }
+    environment: &env { 'BOOT_NODE': 'boot.com', 'NETWORK_SYNC_INTERVAL': '5' }
+    volumes:
+      - /usr/local/etc/pychain/client_1:/usr/local/etc/pychain
