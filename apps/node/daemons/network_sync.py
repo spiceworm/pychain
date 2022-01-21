@@ -39,25 +39,24 @@ def main() -> None:
             cache.guid_map[client.guid] = cache.address = client.address
             cache.network_guid = cache.guid = client.guid
             log.info("Joined network as %s", client)
-        else:
-            client = Peer(cache.guid, cache.address)
-            log.info("Connected to network as %s", client)
 
-            peers = client.get_peers(cache.guid_map, cache.network_guid, settings.boot_node)
+        client = Peer(cache.guid, cache.address)
+        log.info("Connected to network as %s", client)
+        peers = client.get_peers(cache.guid_map, cache.network_guid, settings.boot_node)
 
-            for peer in peers:
-                highest_guid_known_to_client = max(cache.guid, cache.network_guid)
-                cache.network_guid = peer.sync(highest_guid_known_to_client)
+        for peer in peers:
+            highest_guid_known_to_client = max(cache.guid, cache.network_guid)
+            cache.network_guid = peer.sync(highest_guid_known_to_client)
 
-            log.info("SYNC COMPLETE")
-            log.info("  client: %s", client)
-            log.info("  network_guid: %s", cache.network_guid)
-            log.info("  peers:")
-            for peer in peers:
-                log.info("    %s", peer)
-            log.info("  guid_map:")
-            for guid, address in cache.guid_map.items():
-                log.info("    %s:%s", guid, address)
+        log.info("SYNC COMPLETE")
+        log.info("  client: %s", client)
+        log.info("  network_guid: %s", cache.network_guid)
+        log.info("  peers:")
+        for peer in peers:
+            log.info("    %s", peer)
+        log.info("  guid_map:")
+        for guid, address in cache.guid_map.items():
+            log.info("    %s:%s", guid, address)
     else:
         log.info("Boot nodes do not perform peer discovery")
 
