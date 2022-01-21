@@ -104,7 +104,7 @@ async def _network_join(request: Request) -> dict:
             if guid in cache.guid_map:
                 sender = Peer(guid, sender_address)
                 cache.guid_map[sender.guid] = sender.address
-                log.info(
+                log.debug(
                     "%s re-joined the network using previously allocated %s",
                     sender,
                     sender.guid,
@@ -126,7 +126,7 @@ async def _network_join(request: Request) -> dict:
 
             sender = Peer(cache.network_guid, sender_address)
             cache.guid_map[sender.guid] = sender.address
-            log.info("%s joined the network", sender)
+            log.debug("%s joined the network", sender)
         else:
             # Sender already joined the network and invoked this endpoint for no reason
             guid = address_map[sender_address]

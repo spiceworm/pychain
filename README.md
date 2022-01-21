@@ -58,8 +58,6 @@ a "capabilities" endpoint whose response gets added as an attribute to Peer
 objects and those capabilities can be used to enable/disable certain features
 when interacting with peer nodes.
 
-Add support for basic message broadcasting between peers
-
 For testing purposes, create a "beacon" node that all nodes alert when a message
   is broadcast. All nodes would tell the beacon that they received this message,
   Checking the beacon logs would allow us to confirm whether the broadcast was
@@ -69,9 +67,6 @@ Configure logrotate
 
 Broadcast message when a peer is leaving the network
 - Handle special message types (events)
-
-Come up with a better GUID storage solution. If a node shuts down and starts up
-  again it should reuse it's old GUID.
 
 Nodes should associate a timestamp with peer GUIDs. That timestamp should get
   updated each time the corresponding peer is responsive. If a client has not

@@ -27,9 +27,9 @@ def main() -> None:
     if not settings.is_boot_node:
         if not cache.address:
             if cache.guid is None:
-                log.info("Sending join request to %s", settings.boot_node.address)
+                log.debug("Sending join request to %s", settings.boot_node.address)
             else:
-                log.info(
+                log.debug(
                     "Sending re-join request to %s using %s",
                     settings.boot_node.address,
                     cache.guid,
@@ -38,17 +38,17 @@ def main() -> None:
             client = settings.boot_node.join_network(cache.guid)
             cache.guid_map[client.guid] = cache.address = client.address
             cache.network_guid = cache.guid = client.guid
-            log.info("Joined network as %s", client)
+            log.debug("Joined network as %s", client)
 
         client = Peer(cache.guid, cache.address)
-        log.info("Connected to network as %s", client)
+        log.debug("Connected to network as %s", client)
         peers = client.get_peers(cache.guid_map, cache.network_guid, settings.boot_node)
 
         for peer in peers:
             highest_guid_known_to_client = max(cache.guid, cache.network_guid)
             cache.network_guid = peer.sync(highest_guid_known_to_client)
 
-        log.info("SYNC COMPLETE")
+        log.info("SYNC RESULTS")
         log.info("  client: %s", client)
         log.info("  network_guid: %s", cache.network_guid)
         log.info("  peers:")
@@ -58,7 +58,7 @@ def main() -> None:
         for guid, address in cache.guid_map.items():
             log.info("    %s:%s", guid, address)
     else:
-        log.info("Boot nodes do not perform peer discovery")
+        log.debug("Boot nodes do not perform peer discovery")
 
 
 if __name__ == "__main__":

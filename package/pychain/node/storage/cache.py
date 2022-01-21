@@ -39,19 +39,18 @@ class Cache:
         if data := self._redis.get("guid"):
             return pickle.loads(data)
         elif (guid_path := settings.storage_dir / "guid").is_file():
-            log.info("Reading GUID from %s", guid_path)
-            with guid_path.open() as f:
-                data = f.read().strip()
+            log.debug("Reading GUID from %s", guid_path)
+            data = guid_path.read_text()
             self.guid = GUID(int(data))
-            log.info("Loaded %s from %s", self.guid, guid_path)
+            log.debug("Loaded %s from %s", self.guid, guid_path)
             return self.guid
 
     @guid.setter
     def guid(self, value: GUID):
         if not (guid_path := settings.storage_dir / "guid").is_file():
-            log.info("Writing %s to %s", value, guid_path)
-            with guid_path.open("w") as f:
-                f.write(str(value))
+            log.debug("Writing %s to %s", value, guid_path)
+            guid_path.parent.mkdir(parents=True, exist_ok=True)
+            guid_path.write_text(str(value))
 
         self._redis.set("guid", pickle.dumps(value))
 

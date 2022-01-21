@@ -200,7 +200,9 @@ class Peer:
         if message.originator is None:
             message.originator = self
         url = f"http://{self.address}/api/v1/broadcast"
-        return await session.put(url, json=message.as_json())
+        async with session.put(url, json=message.as_json()) as resp:
+            resp.raise_for_status()
+            return await resp.json()
 
     def get_peers(self, guid_map: RedisDict, guid_max: GUID, boot_node: Peer) -> List[Peer]:
         """
@@ -212,7 +214,7 @@ class Peer:
 
         peer_guids = self.guid.get_primary_peers(guid_max)
         total_peer_guids = len(peer_guids)
-        log.info("Searching for peers in %s", peer_guids)
+        log.debug("Searching for peers in %s", peer_guids)
 
         while peer_guids:
             guid = peer_guids.pop(0)
@@ -220,76 +222,58 @@ class Peer:
             peer = Peer(guid, address)
             if peer.address:
                 if peer.is_unresponsive():
-                    log.info("%s: Unresponsive", peer)
+                    log.debug("%s: Unresponsive", peer)
                     next_guid = peer_guids[0] if peer_guids else self.guid
                     backup_guids = self.guid.get_backup_peers(guid, next_guid, guid_max)
-                    log.info("Finding backup peer in %s", peer, backup_guids)
+                    log.debug("Finding backup peer in %s", peer, backup_guids)
 
                     for backup_guid in backup_guids:
                         backup_address = guid_map.get(backup_guid)
                         backup_peer = Peer(backup_guid, backup_address)
                         if backup_peer.address:
                             if backup_peer.is_alive():
-                                log.info("%s: Responsive backup", backup_peer)
+                                log.debug("%s: Responsive backup", backup_peer)
                                 peers.append(backup_peer)
                                 break
                             else:
-                                log.info("%s: Unresponsive backup", backup_peer)
+                                log.debug("%s: Unresponsive backup", backup_peer)
                         else:
-                            log.info("%s: Unknown address for backup", backup_peer)
+                            log.debug("%s: Unknown address for backup", backup_peer)
                             unaddressed_backup_peers.append(backup_peer)
                     else:
-                        log.info("%s: No backup GUIDs found", peer)
+                        log.debug("%s: No backup GUIDs found", peer)
                 else:
-                    log.info("%s: Responsive", peer)
+                    log.debug("%s: Responsive", peer)
                     peers.append(peer)
             else:
-                log.info("%s: Unknown address", peer)
+                log.debug("%s: Unknown address", peer)
                 unaddressed_peers.append(peer)
 
-        while unaddressed_peers:
-            if len(peers) < total_peer_guids:
-                peer = unaddressed_peers.pop(0)
-                if address := boot_node.get_peer_address(peer.guid):
-                    guid_map[peer.guid] = peer.address = address
-                    if peer.is_alive():
-                        log.info("%s: Responsive peer found after boot node lookup", peer)
-                        peers.append(peer)
+        def process_unaddressed_peers(peer_lst):
+            while peer_lst:
+                if len(peers) < total_peer_guids:
+                    _peer = peer_lst.pop(0)
+                    if _address := boot_node.get_peer_address(_peer.guid):
+                        guid_map[_peer.guid] = _peer.address = _address
+                        if _peer.is_alive():
+                            log.debug("%s: Responsive peer found after boot node lookup", _peer)
+                            peers.append(_peer)
+                        else:
+                            log.debug(
+                                "%s: Unresponsive peer detected after boot node lookup",
+                                _peer,
+                            )
                     else:
-                        log.info(
-                            "%s: Unresponsive peer detected after boot node lookup",
-                            peer,
+                        log.error(
+                            "Could not lookup address for GUID %s using boot node. This "
+                            "should never happen because we should never be touching GUIDs "
+                            "that the boot node did not hand out and is therefore knows "
+                            "the associated address for.",
+                            _peer.guid,
                         )
-                else:
-                    log.error(
-                        "Could not lookup address for GUID %s using boot node. This "
-                        "should never happen because we should never be touching GUIDs "
-                        "that the boot node did not hand out and is therefore knows "
-                        "the associated address for.",
-                        peer.guid,
-                    )
 
-        while unaddressed_backup_peers:
-            if len(peers) < total_peer_guids:
-                peer = unaddressed_backup_peers.pop(0)
-                if address := boot_node.get_peer_address(peer.guid):
-                    guid_map[peer.guid] = peer.address = address
-                    if peer.is_alive():
-                        log.info("%s: Responsive backup found after boot node lookup", peer)
-                        peers.append(peer)
-                    else:
-                        log.info(
-                            "%s: Unresponsive backup detected after boot node lookup",
-                            peer,
-                        )
-                else:
-                    log.error(
-                        "Could not lookup address for GUID %s using boot node. This "
-                        "should never happen because we should never be touching GUIDs "
-                        "that the boot node did not hand out and is therefore knows "
-                        "the associated address for.",
-                        peer.guid,
-                    )
+        process_unaddressed_peers(unaddressed_peers)
+        process_unaddressed_peers(unaddressed_backup_peers)
 
         return peers
 
