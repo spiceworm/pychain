@@ -8,7 +8,6 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         gettext-base \
         nginx \
-        redis-server \
         supervisor \
     && apt-get clean \
     && rm -Rf /var/lib/apt/lists/*

@@ -1,11 +1,16 @@
+import asyncio
 import logging
 import random
 
+from aiohttp import ClientSession
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from pychain.node.config import settings
-from pychain.node.models import Peer
-from pychain.node.storage.cache import cache
+from pychain.node.db import Database
+from pychain.node.models import (
+    GUID,
+    Node,
+)
 
 
 logging.basicConfig(
@@ -19,46 +24,42 @@ logging.basicConfig(
 # Suppress apscheduler log messages
 logging.getLogger("apscheduler").setLevel(logging.WARNING)
 
+
 log = logging.getLogger(__file__)
+
+
+async def network_sync() -> None:
+    db = Database()
+    await db.init()
+
+    async with ClientSession() as session:
+        if not (client := await db.get_client()):
+            boot_node = Node(GUID(0), settings.boot_node_address)
+            log.info("Sending join request to %s", boot_node.address)
+            client = await boot_node.join_network(session)
+            await db.set_client(client.address, client.guid)
+            log.debug("Joined network as %s", client)
+
+        log.debug("Connected to network as %s", client)
+
+        for peer in (peers := await client.get_peers(db, session)):
+            await db.ensure_node(peer.address, peer.guid)
+            old_max_guid_node = await db.get_max_guid_node()
+            new_max_guid_peer = await peer.sync(client.guid, old_max_guid_node, session)
+            await db.ensure_node(new_max_guid_peer.address, new_max_guid_peer.guid)
+
+    log.info("client: %s", client)
+    log.info("max guid: %s", await db.get_max_guid())
+    log.info("peers: %s", [int(p.guid) for p in peers])
+    log.info("-" * 10)
 
 
 def main() -> None:
     """ """
-    if not settings.is_boot_node:
-        if not cache.address:
-            if cache.guid is None:
-                log.debug("Sending join request to %s", settings.boot_node.address)
-            else:
-                log.debug(
-                    "Sending re-join request to %s using %s",
-                    settings.boot_node.address,
-                    cache.guid,
-                )
-
-            client = settings.boot_node.join_network(cache.guid)
-            cache.guid_map[client.guid] = cache.address = client.address
-            cache.network_guid = cache.guid = client.guid
-            log.debug("Joined network as %s", client)
-
-        client = Peer(cache.guid, cache.address)
-        log.debug("Connected to network as %s", client)
-        peers = client.get_peers(cache.guid_map, cache.network_guid, settings.boot_node)
-
-        for peer in peers:
-            highest_guid_known_to_client = max(cache.guid, cache.network_guid)
-            cache.network_guid = peer.sync(highest_guid_known_to_client)
-
-        log.info("SYNC RESULTS")
-        log.info("  client: %s", client)
-        log.info("  network_guid: %s", cache.network_guid)
-        log.info("  peers:")
-        for peer in peers:
-            log.info("    %s", peer)
-        log.info("  guid_map:")
-        for guid, address in cache.guid_map.items():
-            log.info("    %s:%s", guid, address)
+    if settings.is_boot_node:
+        log.debug("Boot nodes do not perform network sync")
     else:
-        log.debug("Boot nodes do not perform peer discovery")
+        asyncio.run(network_sync())
 
 
 if __name__ == "__main__":

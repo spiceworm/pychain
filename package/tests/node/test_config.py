@@ -1,28 +1,19 @@
 from pathlib import Path
-import socket
 
 import pytest
 
 from pychain.node.config import settings
-from pychain.node.models import Peer
 
 
-def test_boot_node(monkeypatch):
-    def gethostbyname(s):
-        return "0.0.0.0"
-
+def test_boot_node_name(monkeypatch):
     monkeypatch.setenv("BOOT_NODE", "boot.com")
-    monkeypatch.setattr(socket, "gethostbyname", gethostbyname)
-    boot_node = settings.boot_node
-    assert isinstance(boot_node, Peer)
-    assert boot_node.guid is None
-    assert boot_node.address == "0.0.0.0"
+    assert settings.boot_node_address == "boot.com"
     monkeypatch.undo()
 
 
 def test_boot_node_unset():
     with pytest.raises(KeyError):
-        settings.boot_node
+        settings.boot_node_address
 
 
 def test_is_boot_node():
@@ -30,11 +21,7 @@ def test_is_boot_node():
 
 
 def test_is_boot_node_unset(monkeypatch):
-    def gethostbyname(s):
-        return "0.0.0.0"
-
     monkeypatch.setenv("BOOT_NODE", "boot.com")
-    monkeypatch.setattr(socket, "gethostbyname", gethostbyname)
     assert not settings.is_boot_node
     monkeypatch.undo()
 

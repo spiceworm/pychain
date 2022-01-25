@@ -1,21 +1,30 @@
 from __future__ import annotations
 import functools
+from ipaddress import (
+    AddressValueError,
+    IPv4Address,
+)
 import logging
 import socket
-from typing import List, Union
+from typing import (
+    List,
+    Union,
+)
 
-from aiohttp import ClientResponse, ClientSession
-import requests
+from aiohttp import ClientSession
 
-from .exceptions import GUIDNotInNetwork, NetworkJoinException
-from .storage.redis_dict import RedisDict
+from .exceptions import (
+    GUIDNotInNetwork,
+    NetworkJoinException,
+)
+from .config import settings
 
 
 __all__ = (
     "DeadPeer",
     "GUID",
     "Message",
-    "Peer",
+    "Node",
 )
 
 
@@ -47,15 +56,15 @@ class GUID:
 
     def get_backup_peers(self, start_guid: GUID, stop_guid: GUID, guid_max: GUID) -> List[GUID]:
         """
-        :param start_guid: Peer GUID where the next value in the network array is the
+        :param start_guid: Node GUID where the next value in the network array is the
             first backup GUID if it does not equal stop_guid.
-        :param stop_guid: Peer GUID where the prior value in the network array is the
+        :param stop_guid: Node GUID where the prior value in the network array is the
             last backup GUID if it does not equal start_guid.
         :param guid_max: Highest GUID in use by the network.
         :return: List of GUID integers for peers of the node with GUID `n`.
 
         Example network:
-                0
+                10
             9       1
           8           2
           7           3
@@ -65,7 +74,7 @@ class GUID:
         # If current peer.guid == 6, compute the backup GUIDs that fall between
         # peer 2 and 8 where 9 is the highest GUID in the network.
         >>> GUID(6).get_backup_peers(GUID(2), GUID(8), GUID(9))
-        [GUID(id=1), GUID(id=0), GUID(id=9)]
+        [GUID(id=1), GUID(id=9)]
 
         # If current peer.guid == 9, compute the backup GUIDs that fall between
         # peer 7 and 5 where 9 is the highest GUID in the network.
@@ -75,7 +84,7 @@ class GUID:
         # If current peer.guid == 9, compute the backup GUIDs that fall between
         # peer 1 and 9 where 9 is the highest GUID in the network.
         >>> GUID(9).get_backup_peers(GUID(1), GUID(9), GUID(9))
-        [GUID(id=0)]
+        []
         """
         network = self._get_network(guid_max)
 
@@ -100,7 +109,7 @@ class GUID:
             the list of GUIDs.
 
         Example network:
-                0
+                10
             9       1
           8           2
           7           3
@@ -108,21 +117,22 @@ class GUID:
                 5
 
         # If current peer.guid == 5, compute the GUID network.
-        >>> GUID(5)._get_network(GUID(9))
+        >>> GUID(5)._get_network(GUID(10))
         [GUID(id=5),
          GUID(id=4),
          GUID(id=3),
          GUID(id=2),
          GUID(id=1),
-         GUID(id=0),
+         GUID(id=10),
          GUID(id=9),
          GUID(id=8),
          GUID(id=7),
          GUID(id=6)]
 
         # If current peer.guid == 0, compute the GUID network.
-        >>> GUID(0)._get_network(GUID(9))
-        [GUID(id=0),
+        >>> GUID(1)._get_network(GUID(10))
+        [GUID(id=1)
+         GUID(id=10),
          GUID(id=9),
          GUID(id=8),
          GUID(id=7),
@@ -130,10 +140,9 @@ class GUID:
          GUID(id=5),
          GUID(id=4),
          GUID(id=3),
-         GUID(id=2),
-         GUID(id=1)]
+         GUID(id=2)]
         """
-        seq = [*range(int(guid_max) + 1)][::-1]
+        seq = [*range(1, int(guid_max) + 1)][::-1]
         offset = int(guid_max) - self.id
         ids = seq[offset::] + seq[:offset:]
         return [GUID(_id) for _id in ids]
@@ -144,7 +153,7 @@ class GUID:
         :return: List of GUID integers for peers of the node with GUID `n`.
 
         Example network:
-                0
+                10
             9       1
           8           2
           7           3
@@ -157,31 +166,38 @@ class GUID:
 
         # If current peer.guid == 5, compute the peers where 9 is the highest GUID.
         >>> GUID(5).get_primary_peers(GUID(9))
-        [GUID(id=4), GUID(id=3), GUID(id=1), GUID(id=7)]
+        [GUID(id=4), GUID(id=3), GUID(id=1), GUID(id=6)]
         """
         network = self._get_network(guid_max)
         distance = 1
         peer_guids = []
-        while distance <= guid_max.id:
+        while distance < guid_max.id:
             peer_guids.append(network[distance])
             distance *= 2
         return peer_guids
 
 
 @functools.total_ordering
-class Peer:
-    def __init__(self, guid: Union[GUID, None], address: Union[str, None]):
-        self.address = socket.gethostbyname(address) if address else address
-        self.guid = guid
-        self._is_boot_node = None
+class Node:
+    def __init__(self, guid: GUID, address: Union[IPv4Address, str, None]):
+        try:
+            address = IPv4Address(address)
+        except AddressValueError:
+            # A url or None was passed in for the address value
+            address = socket.gethostbyname(address) if address else address
+        else:
+            address = str(address)
 
-    def __eq__(self, other: Peer) -> bool:
+        self.address = address
+        self.guid = guid
+
+    def __eq__(self, other: Node) -> bool:
         return self.guid == other.guid
 
     def __hash__(self) -> int:
         return hash(self.guid)
 
-    def __lt__(self, other: Peer) -> bool:
+    def __lt__(self, other: Node) -> bool:
         return self.guid < other.guid
 
     def __repr__(self) -> str:
@@ -196,121 +212,85 @@ class Peer:
             "guid": int(self.guid),
         }
 
-    async def broadcast(self, message: Message, session: ClientSession) -> ClientResponse:
-        if message.originator is None:
-            message.originator = self
-        url = f"http://{self.address}/api/v1/broadcast"
-        async with session.put(url, json=message.as_json()) as resp:
-            resp.raise_for_status()
-            return await resp.json()
+    async def broadcast(self, message: Message, session: ClientSession):
+        message.originator = message.originator or self
+        return await self._send("put", "/api/v1/broadcast", session, json=message.as_json())
 
-    def get_peers(self, guid_map: RedisDict, guid_max: GUID, boot_node: Peer) -> List[Peer]:
+    async def _ensure_address(self, session: ClientSession) -> None:
+        if self.address is None:
+            log.info("Retrieving %s address from boot node", self.guid)
+            boot_node = Node(GUID(0), settings.boot_node_address)
+            self.address = await boot_node.get_node_address(self.guid, session)
+
+    async def get_peers(self, db, session: ClientSession) -> List[Node]:
         """
         This method has a side-effect of adding new entries to `peer_map`.
         """
         peers = []
-        unaddressed_peers = []
-        unaddressed_backup_peers = []
 
-        peer_guids = self.guid.get_primary_peers(guid_max)
-        total_peer_guids = len(peer_guids)
+        max_guid = await db.get_max_guid()
+        peer_guids = self.guid.get_primary_peers(max_guid)
         log.debug("Searching for peers in %s", peer_guids)
 
         while peer_guids:
             guid = peer_guids.pop(0)
-            address = guid_map.get(guid)
-            peer = Peer(guid, address)
-            if peer.address:
-                if peer.is_unresponsive():
-                    log.debug("%s: Unresponsive", peer)
-                    next_guid = peer_guids[0] if peer_guids else self.guid
-                    backup_guids = self.guid.get_backup_peers(guid, next_guid, guid_max)
-                    log.debug("Finding backup peer in %s", peer, backup_guids)
-
-                    for backup_guid in backup_guids:
-                        backup_address = guid_map.get(backup_guid)
-                        backup_peer = Peer(backup_guid, backup_address)
-                        if backup_peer.address:
-                            if backup_peer.is_alive():
-                                log.debug("%s: Responsive backup", backup_peer)
-                                peers.append(backup_peer)
-                                break
-                            else:
-                                log.debug("%s: Unresponsive backup", backup_peer)
-                        else:
-                            log.debug("%s: Unknown address for backup", backup_peer)
-                            unaddressed_backup_peers.append(backup_peer)
-                    else:
-                        log.debug("%s: No backup GUIDs found", peer)
-                else:
-                    log.debug("%s: Responsive", peer)
-                    peers.append(peer)
+            peer = await db.get_node(guid)
+            if await peer.is_alive(session):
+                peers.append(peer)
             else:
-                log.debug("%s: Unknown address", peer)
-                unaddressed_peers.append(peer)
+                log.info("%s: Unresponsive/unknown", peer)
+                next_guid = peer_guids[0] if peer_guids else self.guid
+                backup_guids = self.guid.get_backup_peers(guid, next_guid, max_guid)
+                log.info("Finding backup peer in %s", peer, backup_guids)
 
-        def process_unaddressed_peers(peer_lst):
-            while peer_lst:
-                if len(peers) < total_peer_guids:
-                    _peer = peer_lst.pop(0)
-                    if _address := boot_node.get_peer_address(_peer.guid):
-                        guid_map[_peer.guid] = _peer.address = _address
-                        if _peer.is_alive():
-                            log.debug("%s: Responsive peer found after boot node lookup", _peer)
-                            peers.append(_peer)
-                        else:
-                            log.debug(
-                                "%s: Unresponsive peer detected after boot node lookup",
-                                _peer,
-                            )
-                    else:
-                        log.error(
-                            "Could not lookup address for GUID %s using boot node. This "
-                            "should never happen because we should never be touching GUIDs "
-                            "that the boot node did not hand out and is therefore knows "
-                            "the associated address for.",
-                            _peer.guid,
-                        )
-
-        process_unaddressed_peers(unaddressed_peers)
-        process_unaddressed_peers(unaddressed_backup_peers)
+                for backup_guid in backup_guids:
+                    backup_peer = await db.get_node(backup_guid)
+                    if backup_peer is not None and await backup_peer.is_alive(session):
+                        log.info("%s: Responsive backup", backup_peer)
+                        peers.append(backup_peer)
+                        break
 
         return peers
 
-    def get_peer_address(self, guid: GUID) -> str:
-        return self._send(requests.get, f"/api/v1/peers/{guid}")
+    async def get_node_address(self, guid: GUID, session: ClientSession) -> str:
+        return await self._send("get", f"/api/v1/nodes/{guid}", session)
 
-    def is_alive(self) -> bool:
+    async def is_alive(self, session: ClientSession) -> bool:
         try:
-            self._send(requests.get, "/api/v1/status")
-        # except requests.RequestException:
-        except Exception:
-            # log.exception("Error thrown during liveliness check for %s", self)
+            await self._send("get", "/api/v1/status", session)
+        except Message:
             return False
         return True
 
-    def is_boot_node(self) -> bool:
-        return self._send(requests.get, "/api/v1/status")["is_boot_node"]
-
-    def is_unresponsive(self) -> bool:
-        return not self.is_alive()
-
-    def join_network(self, guid: Union[GUID, None] = None) -> Peer:
-        data = {"guid": int(guid)} if guid is not None else {}
-        if response := self._send(requests.put, "/api/v1/network/join", json=data):
-            guid_id, address = response["guid"], response["address"]
+    async def join_network(self, session: ClientSession) -> Node:
+        if resp := await self._send("put", "/api/v1/network/join", session):
+            guid_id, address = resp["guid"], resp["address"]
             guid = GUID(guid_id)
-            return Peer(guid, address)
+            return Node(guid, address)
         raise NetworkJoinException(f"Sent join request to non-boot node: {self}")
 
-    def _send(self, request, path, *args, **kwargs) -> Union[bool, dict, int, str]:
-        resp = request(f"http://{self.address}{path}", *args, **kwargs, timeout=5)
-        resp.raise_for_status()
-        return resp.json()
+    async def _send(self, request_type: str, path: str, session: ClientSession, *args, **kwargs):
+        await self._ensure_address(session)
+        url = f"http://{self.address}{path}"
+        async with getattr(session, request_type)(url, *args, **kwargs) as resp:
+            resp.raise_for_status()
+            return await resp.json()
 
-    def sync(self, guid: GUID) -> GUID:
-        guid_id = self._send(requests.post, "/api/v1/sync", json={"guid": int(guid)})
-        return GUID(guid_id)
+    async def sync(self, sender_guid: GUID, max_guid_node: Node, session: ClientSession) -> Node:
+        resp = await self._send(
+            "post",
+            "/api/v1/sync",
+            session,
+            json={
+                "guid": int(sender_guid),
+                "max_guid_node": {
+                    "address": max_guid_node.address,
+                    "guid": int(max_guid_node.guid),
+                },
+            },
+        )
+        max_guid_node_address, max_guid_node_guid = resp["address"], resp["guid"]
+        return Node(GUID(max_guid_node_guid), max_guid_node_address)
 
 
 class Message:
@@ -318,7 +298,7 @@ class Message:
         self,
         data: dict,
         id: Union[int, None] = None,
-        originator: Union[Peer, None] = None,
+        originator: Union[Node, None] = None,
         broadcast_timestamp: Union[float, None] = None,
     ):
         self.data = data
@@ -349,7 +329,7 @@ class DeadPeer(Message):
         self,
         guid: GUID,
         id: Union[int, None] = None,
-        originator: Union[Peer, None] = None,
+        originator: Union[Node, None] = None,
         broadcast_timestamp: Union[float, None] = None,
     ):
         data = {

@@ -1,13 +1,7 @@
 ## Node Configuration
-* `ADDRESS_CHECK_FREQUENCY` (optional, default: 25)
-  * How many executions of peer_scan.py should occur before this node asks a peer what
-    it's IP address is. This feature exists to handle the case where a client's IP
-    address changes.
-
-* `BOOT_NODES` (required)
-  * Comma delimited list of nodes to use for bootstrapping to the network. Of the nodes
-    provided, a randomly selected subset of `MAX_BOOT_NODES` will be used.
-  * Example config: `BOOT_NODES=<URL or IP-address>,[<URL or IP-address>]`
+* `BOOT_NODE` (required)
+  * Node to use for bootstrapping to the network.
+  * Example config: `BOOT_NODE=<URL or IP-address>`
 
 * `LOG_DIR` (optional, default: /var/log/pychain)
   * Filesystem directory where logs will be written
@@ -20,7 +14,8 @@
 
 ## Development Environment
 ```bash
-$ docker-compose up --build
+# Start up 1 boot node and 3 client nodes (can change the number of client nodes)
+$ ./run.py 3
 
 # Tail logs to observe node behavior
 $ docker exec -it pychain_client_1_1 tail -f /var/log/pychain/{api,network_sync}.log
@@ -37,11 +32,12 @@ $ docker-compose -f test.yml up --build
 Each node is running
 - nginx: reverse proxy to API
 - uvicorn: Serving API written in FastAPI
-- redis: Stores node settings
 - python: Long running `network_sync` process that causes has client join the network
     and synchronize with peers
+- postgres: Running in sidecar container alongside each node container and is used
+    to store node state.
 
-All of these processes are managed by supervisor.
+nginx, uvicorn, and python processes are managed by supervisor in the client container.
 ```
 
 ## Development notes
@@ -95,19 +91,21 @@ Handle case where boot node goes down. It will need to remember the GUIDs it has
 # it's own GUID and address.
 
 import aiohttp, asyncio
-from pychain.node.models import DeadPeer, GUID, Message, Peer
-from pychain.node.storage.cache import cache
+from pychain.node.models import DeadPeer, GUID, Message
+from pychain.node.db import Database
 
 
 async def main():
+    db = Database()
+    await db.init()
+    client = await db.get_client()
+
     async with aiohttp.ClientSession() as session:
         msg1 = Message({"event": "something", "args": [1], "kwargs": {2: 3}})
-        resp1 = await Peer(cache.guid, cache.address).broadcast(msg1, session)
-        resp1.raise_for_status()
+        await client.broadcast(msg1, session)
 
         msg2 = DeadPeer(GUID(123))
-        resp2 = await Peer(cache.guid, cache.address).broadcast(msg2, session)
-        resp2.raise_for_status()
+        await client.broadcast(msg2, session)
 
 
 asyncio.run(main())

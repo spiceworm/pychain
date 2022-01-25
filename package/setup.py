@@ -7,9 +7,9 @@ here = os.path.abspath(os.path.dirname(__file__))
 
 requires = [
     "aiohttp>=3.8.1",
-    "hiredis>=2.0.0",
-    "redis==4.1.0",
-    "requests>=2.26.0",
+    "asyncpg>=0.25.0",
+    "psycopg2-binary>=2.9.3",
+    "SQLAlchemy>=1.4.31",
 ]
 
 about = {}
