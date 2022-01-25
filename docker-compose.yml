@@ -1,73 +1,33 @@
 version: "3.7"
 services:
-  boot_1:
-    build: &node_build { 'context': '.', 'dockerfile': './apps/node/Dockerfile' }
-    networks: { 'default': { 'aliases': ['boot.com'] } }
+  bootstrap_node:
+    build:
+      context: .
+      dockerfile: ./apps/node/Dockerfile
+    networks:
+      default:
+        aliases:
+          - pychain-bootstrap-node.com
+    environment:
+      SERVER_NAME: pychain-bootstrap-node.com
+    volumes:
+      - ./package:/package
 
-  client_1:
-    build: *node_build
-    environment: &client_env { 'BOOT_NODE': 'boot.com' }
-  client_2:
-    build: *node_build
-    environment: *client_env
-  client_3:
-    build: *node_build
-    environment: *client_env
-  client_4:
-    build: *node_build
-    environment: *client_env
-  client_5:
-    build: *node_build
-    environment: *client_env
-  client_6:
-    build: *node_build
-    environment: *client_env
-  client_7:
-    build: *node_build
-    environment: *client_env
-  client_8:
-    build: *node_build
-    environment: *client_env
-  client_9:
-    build: *node_build
-    environment: *client_env
-  client_10:
-    build: *node_build
-    environment: *client_env
-  client_11:
-    build: *node_build
-    environment: *client_env
-  client_12:
-    build: *node_build
-    environment: *client_env
-  client_13:
-    build: *node_build
-    environment: *client_env
-  client_14:
-    build: *node_build
-    environment: *client_env
-  client_15:
-    build: *node_build
-    environment: *client_env
-  client_16:
-    build: *node_build
-    environment: *client_env
-  client_17:
-    build: *node_build
-    environment: *client_env
-  client_18:
-    build: *node_build
-    environment: *client_env
-  client_19:
-    build: *node_build
-    environment: *client_env
-  client_20:
-    build: *node_build
-    environment: *client_env
+  client_node:
+    build:
+      context: .
+      dockerfile: ./apps/node/Dockerfile
+    networks:
+      default:
+        aliases:
+          - pychain-client-node.com
+    environment:
+      SERVER_NAME: pychain-client-node.com
+    volumes:
+      - ./package:/package
 
+  staker:
+    build: ./apps/staker
 
-#  staker:
-#    build: ./apps/staker
-#
-#  wallet:
-#    build: ./apps/wallet
+  wallet:
+    build: ./apps/wallet
