@@ -11,8 +11,9 @@ log = logging.getLogger(__file__)
 
 
 class _Settings:
-    _boot_node = None
-    _db_host = None
+    def __init__(self):
+        self._boot_node = None
+        self._db_host = None
 
     @property
     def boot_node(self):

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import functools
 from ipaddress import (
     AddressValueError,
@@ -7,6 +8,7 @@ from ipaddress import (
 import logging
 import socket
 from typing import (
+    Callable,
     List,
     Union,
 )
@@ -34,11 +36,11 @@ log = logging.getLogger(__file__)
 
 @functools.total_ordering
 class GUID:
-    def __init__(self, id: int):
-        self.id = id
+    def __init__(self, id_: int):
+        self.id = id_
 
-    def __eq__(self, other: GUID) -> bool:
-        return self.id == other.id
+    def __eq__(self, other: Union[GUID, int]) -> bool:
+        return int(self) == int(other)
 
     def __hash__(self) -> int:
         return self.id
@@ -46,8 +48,8 @@ class GUID:
     def __int__(self):
         return self.id
 
-    def __lt__(self, other: GUID) -> bool:
-        return self.id < other.id
+    def __lt__(self, other: Union[GUID, int]) -> bool:
+        return int(self) < int(other)
 
     def __repr__(self):
         return f"{self.__class__.__name__}(id={self.id})"
@@ -103,7 +105,7 @@ class GUID:
             return network[start_idx + 1 : stop_idx]
         return network[start_idx + 1 :]
 
-    def _get_network(self, guid_max: GUID) -> List[GUID]:
+    def _get_network(self, guid_max: Union[GUID, int]) -> List[GUID]:
         """
         :param guid_max: Highest GUID in use by the network.
         :return: List of integers rotated such that `self.guid` is the first GUID in
@@ -148,7 +150,7 @@ class GUID:
         ids = seq[offset::] + seq[:offset:]
         return [GUID(_id) for _id in ids]
 
-    def get_primary_peers(self, guid_max: GUID) -> List[GUID]:
+    def get_primary_peers(self, guid_max: Union[GUID, int]) -> List[GUID]:
         """
         :param guid_max: Highest GUID in use by the network.
         :return: List of GUID integers for peers of the node with GUID `n`.
@@ -172,7 +174,7 @@ class GUID:
         network = self._get_network(guid_max)
         distance = 1
         peer_guids = []
-        while distance < guid_max.id:
+        while distance < int(guid_max):
             peer_guids.append(network[distance])
             distance *= 2
         return peer_guids
@@ -180,7 +182,7 @@ class GUID:
 
 @functools.total_ordering
 class Node:
-    def __init__(self, guid: GUID, address: Union[IPv4Address, str, None]):
+    def __init__(self, guid: Union[GUID, int], address: Union[IPv4Address, str, None]):
         try:
             address = IPv4Address(address)
         except AddressValueError:
@@ -190,7 +192,7 @@ class Node:
             address = str(address)
 
         self.address = address
-        self.guid = guid
+        self.guid = GUID(int(guid))
 
     def __eq__(self, other: Node) -> bool:
         return self.guid == other.guid
@@ -198,7 +200,9 @@ class Node:
     def __hash__(self) -> int:
         return hash(self.guid)
 
-    def __lt__(self, other: Node) -> bool:
+    def __lt__(self, other: Union[Node, int]) -> bool:
+        if isinstance(other, int):
+            return int(self.guid) < other
         return self.guid < other.guid
 
     def __repr__(self) -> str:
@@ -215,19 +219,12 @@ class Node:
 
     def broadcast(self, message: Message):
         message.originator = message.originator or self
-        url = f"http://{self.address}/api/v1/broadcast"
-        return requests.put(url, json=message.as_json())
-
-    async def _ensure_address(self, session: ClientSession) -> None:
-        if self.address is None:
-            log.info("Retrieving %s address from boot node", self.guid)
-            boot_node = Node(GUID(0), settings.boot_node_address)
-            self.address = await boot_node.get_node_address(self.guid, session)
+        resp = requests.put(f"http://{self.address}/api/v1/broadcast", json=message.as_json())
+        resp.raise_for_status()
+        return resp.json()
 
     async def get_peers(self, db, session: ClientSession) -> List[Node]:
-        """
-        This method has a side-effect of adding new entries to `peer_map`.
-        """
+        """ """
         peers = []
 
         max_guid = await db.get_max_guid()
@@ -239,6 +236,7 @@ class Node:
             peer = await db.get_node(guid)
             if await peer.is_alive(session):
                 peers.append(peer)
+                await db.ensure_node(peer.address, peer.guid)
             else:
                 log.info("%s: Unresponsive/unknown", peer)
                 next_guid = peer_guids[0] if peer_guids else self.guid
@@ -250,37 +248,54 @@ class Node:
                     if backup_peer is not None and await backup_peer.is_alive(session):
                         log.info("%s: Responsive backup", backup_peer)
                         peers.append(backup_peer)
+                        await db.ensure_node(backup_peer.address, backup_peer.guid)
                         break
 
         return peers
 
-    async def get_node_address(self, guid: GUID, session: ClientSession) -> str:
-        return await self._send("get", f"/api/v1/nodes/{guid}", session)
+    async def get_node_address(self, guid: GUID, session: ClientSession) -> Union[str, None]:
+        """
+        Returns the IP address of the `Node` where `Node.guid` == `guid` if an entry for `guid`
+        exists in the database of the client represented by this `Node`. If the client does not
+        have a database entry for `guid`, returns `None`.
+        """
+        return await self._send(session.get, f"/api/v1/nodes/{guid}", session)
 
     async def is_alive(self, session: ClientSession) -> bool:
+        """
+        Returns True if the API of the client represented by this `Node` is responsive.
+        """
         try:
-            await self._send("get", "/api/v1/status", session)
-        except Message:
+            await self._send(session.get, "/api/v1/status", session)
+        except Exception:
             return False
         return True
 
     async def join_network(self, session: ClientSession) -> Node:
-        if resp := await self._send("put", "/api/v1/network/join", session):
+        if resp := await self._send(session.put, "/api/v1/network/join", session):
             guid_id, address = resp["guid"], resp["address"]
-            guid = GUID(guid_id)
-            return Node(guid, address)
+            return Node(guid_id, address)
         raise NetworkJoinException(f"Sent join request to non-boot node: {self}")
 
-    async def _send(self, request_type: str, path: str, session: ClientSession, *args, **kwargs):
-        await self._ensure_address(session)
-        url = f"http://{self.address}{path}"
-        async with getattr(session, request_type)(url, *args, **kwargs) as resp:
+    async def _send(self, request: Callable, path: str, session: ClientSession, *args, **kwargs):
+        """
+        Asynchronously send a request to the API of the client represented by this `Node`.
+        """
+        if self.address is None:
+            log.info("Retrieving %s address from boot node", self.guid)
+            self.address = await settings.boot_node.get_node_address(self.guid, session)
+
+        async with request(f"http://{self.address}{path}", *args, **kwargs) as resp:
             resp.raise_for_status()
             return await resp.json()
 
     async def sync(self, sender_guid: GUID, max_guid_node: Node, session: ClientSession) -> Node:
+        """
+        Returns a `Node` instance representing the node on the network with the highest
+        GUID known to the client represented by this `Node`.
+        """
         resp = await self._send(
-            "post",
+            session.post,
             "/api/v1/sync",
             session,
             json={
@@ -292,7 +307,7 @@ class Node:
             },
         )
         max_guid_node_address, max_guid_node_guid = resp["address"], resp["guid"]
-        return Node(GUID(max_guid_node_guid), max_guid_node_address)
+        return Node(max_guid_node_guid, max_guid_node_address)
 
 
 class Message:

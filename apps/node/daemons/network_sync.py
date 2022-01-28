@@ -7,10 +7,6 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 
 from pychain.node.config import settings
 from pychain.node.db import Database
-from pychain.node.models import (
-    GUID,
-    Node,
-)
 
 
 logging.basicConfig(
@@ -29,14 +25,13 @@ log = logging.getLogger(__file__)
 
 
 async def network_sync() -> None:
-    db = Database()
+    db = Database(host=settings.db_host, password=settings.db_password)
     await db.init()
 
     async with ClientSession() as session:
         if not (client := await db.get_client()):
-            boot_node = Node(GUID(0), settings.boot_node_address)
-            log.info("Sending join request to %s", boot_node.address)
-            client = await boot_node.join_network(session)
+            log.info("Sending join request to %s", settings.boot_node.address)
+            client = await settings.boot_node.join_network(session)
             await db.set_client(client.address, client.guid)
             log.debug("Joined network as %s", client)
 

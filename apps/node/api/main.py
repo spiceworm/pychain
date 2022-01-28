@@ -24,13 +24,16 @@ log = logging.getLogger(__file__)
 
 def create_app():
     api = fastapi.FastAPI()
-    db = Database()
-    mempool = rq.Queue('mempool', connection=redis.Redis())
+    db = Database(host=settings.db_host, password=settings.db_password)
+    mempool = rq.Queue("mempool", connection=redis.Redis())
     session = aiohttp.ClientSession()
     api.include_router(v1_router, prefix="/api/v1")
 
     @api.middleware("http")
     async def db_session_middleware(request: fastapi.Request, call_next):
+        """
+        This function is called for every incoming request
+        """
         request.state.db = db
         request.state.mempool = mempool
         request.state.session = session
@@ -38,20 +41,20 @@ def create_app():
 
     @api.on_event("startup")
     async def startup() -> None:
-        log.info("Starting client API")
+        log.debug("Starting client API")
 
-        log.info("Creating database schema")
+        log.debug("Creating database schema")
         db.create_schema()
 
-        log.info("Initializing async database connection")
+        log.debug("Initializing async database connection")
         await db.init()
 
-        log.info("Initializing message row")
+        log.debug("Initializing message row")
         await db.ensure_message()
 
     @api.on_event("shutdown")
     async def shutdown() -> None:
-        log.info("Stopping client API")
+        log.debug("Stopping client API")
 
         if not session.closed:
             await session.close()

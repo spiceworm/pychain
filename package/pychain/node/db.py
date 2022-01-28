@@ -11,18 +11,34 @@ from .models import (
     GUID,
     Node,
 )
-from .config import settings
 
 
 class Database:
     metadata = sa.MetaData()
 
-    def __init__(self):
-        self.user = "postgres"
-        self.password = settings.db_password
-        self.host = settings.db_host
-        self.port = 5432
-        self.database = "postgres"
+    def __init__(
+        self,
+        *,
+        host: str,
+        password: str,
+        port: int = 5432,
+        user: str = "postgres",
+        database: str = "postgres",
+    ):
+        self.user = user
+        self.password = password
+        self.host = host
+        self.port = port
+        self.database = database
+
+    async def add_node(self, address: str) -> Node:
+        # Only boot nodes should invoke this method
+        async with self.pool.acquire() as conn:
+            guid_id = await conn.fetchval(
+                "INSERT INTO nodes (address) VALUES ($1) RETURNING guid",
+                address,
+            )
+            return Node(guid_id, address)
 
     def create_schema(self):
         dsn = f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
@@ -35,32 +51,21 @@ class Database:
                 "INSERT INTO messages (id, counter) VALUES (1, 0) ON CONFLICT DO NOTHING"
             )
 
-    async def ensure_node(self, address: str, guid: Union[GUID, int, None] = None) -> Node:
+    async def ensure_node(self, address: str, guid: Union[GUID, int]) -> None:
         async with self.pool.acquire() as conn:
-            if guid is not None:
-                query = """
-                    INSERT INTO nodes (address, guid) 
-                    VALUES ($1, $2) 
-                    ON CONFLICT DO NOTHING
-                """
-                args = (address, int(guid))
-            else:
-                # Only boot nodes should invoke this method without a guid argument
-                # It will create a new entry and
-                query = "INSERT INTO nodes (address) VALUES ($1)"
-                args = (address,)
-            await conn.execute(query, *args)
-
-            guid_id = await conn.fetchval("SELECT guid FROM nodes WHERE address=$1", address)
-            guid = GUID(guid_id)
-            return Node(guid, address)
+            query = """
+                INSERT INTO nodes (address, guid) 
+                VALUES ($1, $2) 
+                ON CONFLICT DO NOTHING
+            """
+            await conn.execute(query, address, int(guid))
 
     async def get_client(self) -> Union[Node, None]:
         async with self.pool.acquire() as conn:
             if node := await conn.fetchrow("SELECT * FROM nodes WHERE is_client IS TRUE"):
-                guid = GUID(node["guid"])
+                guid_id = node["guid"]
                 address = node["address"]
-                return Node(guid, address)
+                return Node(guid_id, address)
 
     async def get_node(self, guid: [GUID, int]) -> Node:
         async with self.pool.acquire() as conn:
@@ -68,12 +73,12 @@ class Database:
                 address = node["address"]
             else:
                 address = None
-            return Node(GUID(int(guid)), address)
+            return Node(guid, address)
 
     async def get_nodes(self) -> List[Node]:
         async with self.pool.acquire() as conn:
             nodes = await conn.fetch("SELECT guid, address FROM nodes ORDER BY guid")
-            return [Node(GUID(n["guid"]), n["address"]) for n in nodes]
+            return [Node(n["guid"], n["address"]) for n in nodes]
 
     async def get_max_guid(self) -> GUID:
         async with self.pool.acquire() as conn:
@@ -87,7 +92,7 @@ class Database:
             )
             address = node["address"]
             guid_id = node["guid"]
-            return Node(GUID(guid_id), address)
+            return Node(guid_id, address)
 
     async def increment_message_count(self) -> None:
         async with self.pool.acquire() as conn:
@@ -106,7 +111,7 @@ class Database:
             max_size=10,
         )
 
-    async def set_client(self, address: str, guid: GUID) -> None:
+    async def set_client(self, address: str, guid: Union[GUID, int]) -> None:
         async with self.pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO nodes (address, guid, is_client) VALUES ($1, $2, true)",

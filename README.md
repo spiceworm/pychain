@@ -85,14 +85,15 @@ Handle case where boot node goes down. It will need to remember the GUIDs it has
 ### Message Broadcasting
 ```python
 # Run this from within a client container.
-# Make sure network_sync.py has run a few times by tailing the logs.
+# Make sure network_sync.py has run at least once by tailing the logs.
 # Otherwise the client will not know any peers to sent the message to.
 # If it has not ran a single time yet, the client will not even know
 # it's own GUID and address.
 
-from pychain.node.models import Message
+from pychain.node.config import settings
 from pychain.node.db import Database
-db = Database()
+from pychain.node.models import Message
+db = Database(host=settings.db_host, password=settings.db_password)
 await db.init()
 client = await db.get_client()
 client.broadcast(Message({"event": "something", "args": [1], "kwargs": {2: 3}}))
