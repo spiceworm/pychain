@@ -10,6 +10,7 @@ requires = [
     "asyncpg>=0.25.0",
     "psycopg2-binary>=2.9.3",
     "SQLAlchemy>=1.4.31",
+    "requests>=2.26.0",
 ]
 
 about = {}

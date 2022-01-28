@@ -1,7 +1,9 @@
 import logging
 
-from aiohttp import ClientSession
-from fastapi import FastAPI, Request
+import aiohttp
+import fastapi
+import redis
+import rq
 
 from v1 import router as v1_router
 
@@ -21,14 +23,16 @@ log = logging.getLogger(__file__)
 
 
 def create_app():
-    api = FastAPI()
+    api = fastapi.FastAPI()
     db = Database()
-    session = ClientSession()
+    mempool = rq.Queue('mempool', connection=redis.Redis())
+    session = aiohttp.ClientSession()
     api.include_router(v1_router, prefix="/api/v1")
 
     @api.middleware("http")
-    async def db_session_middleware(request: Request, call_next):
+    async def db_session_middleware(request: fastapi.Request, call_next):
         request.state.db = db
+        request.state.mempool = mempool
         request.state.session = session
         return await call_next(request)
 

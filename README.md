@@ -90,23 +90,10 @@ Handle case where boot node goes down. It will need to remember the GUIDs it has
 # If it has not ran a single time yet, the client will not even know
 # it's own GUID and address.
 
-import aiohttp, asyncio
-from pychain.node.models import DeadPeer, GUID, Message
+from pychain.node.models import Message
 from pychain.node.db import Database
-
-
-async def main():
-    db = Database()
-    await db.init()
-    client = await db.get_client()
-
-    async with aiohttp.ClientSession() as session:
-        msg1 = Message({"event": "something", "args": [1], "kwargs": {2: 3}})
-        await client.broadcast(msg1, session)
-
-        msg2 = DeadPeer(GUID(123))
-        await client.broadcast(msg2, session)
-
-
-asyncio.run(main())
+db = Database()
+await db.init()
+client = await db.get_client()
+client.broadcast(Message({"event": "something", "args": [1], "kwargs": {2: 3}}))
 ```

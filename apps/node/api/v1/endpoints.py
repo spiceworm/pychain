@@ -2,7 +2,6 @@ import logging
 import time
 from typing import Union
 
-import asyncio
 from fastapi import Request
 
 from pychain.node.config import settings
@@ -50,8 +49,7 @@ async def _broadcast(request: Request) -> bool:
         message.broadcast_timestamp = time.time()
         log.info("Client of origin broadcasting %s", message)
         should_broadcast = True
-    elif message.id > await db.get_message_count():
-        await db.set_message_count(message.id)
+    elif await db.update_message_count_if_less_than(message.id):
         log.info("Received new %s", message)
         should_broadcast = True
     else:
@@ -59,9 +57,8 @@ async def _broadcast(request: Request) -> bool:
         should_broadcast = False
 
     if should_broadcast:
-        session = request.state.session
-        coroutines = [p.broadcast(message, session) for p in await client.get_peers(db, session)]
-        await asyncio.gather(*coroutines)
+        for peer in await client.get_peers(db, request.state.session):
+            request.state.mempool.enqueue(peer.broadcast, message)
     return should_broadcast
 
 

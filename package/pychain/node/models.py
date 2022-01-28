@@ -12,6 +12,7 @@ from typing import (
 )
 
 from aiohttp import ClientSession
+import requests
 
 from .exceptions import (
     GUIDNotInNetwork,
@@ -212,9 +213,10 @@ class Node:
             "guid": int(self.guid),
         }
 
-    async def broadcast(self, message: Message, session: ClientSession):
+    def broadcast(self, message: Message):
         message.originator = message.originator or self
-        return await self._send("put", "/api/v1/broadcast", session, json=message.as_json())
+        url = f"http://{self.address}/api/v1/broadcast"
+        return requests.put(url, json=message.as_json())
 
     async def _ensure_address(self, session: ClientSession) -> None:
         if self.address is None:
