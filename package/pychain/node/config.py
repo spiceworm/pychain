@@ -46,6 +46,14 @@ class _Settings:
         return Path(os.getenv("LOG_DIR", "/var/log/pychain"))
 
     @property
+    def log_level(self) -> int:
+        level = os.getenv("LOG_LEVEL", "INFO")
+        try:
+            return getattr(logging, level)
+        except AttributeError:
+            log.exception("Invalid log level: %s", level)
+
+    @property
     def network_sync_interval(self) -> int:
         return int(os.getenv("NETWORK_SYNC_INTERVAL", "60"))
 

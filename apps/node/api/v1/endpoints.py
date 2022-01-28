@@ -23,6 +23,7 @@ __all__ = (
 
 
 log = logging.getLogger(__name__)
+log.setLevel(settings.log_level)
 
 
 @router.put("/broadcast")

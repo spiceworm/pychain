@@ -12,7 +12,6 @@ from pychain.node.db import Database
 logging.basicConfig(
     datefmt="%H:%M:%S",
     format="%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s",
-    level=logging.INFO,
     handlers=[
         logging.FileHandler(settings.log_dir / "network_sync.log"),
     ],
@@ -22,6 +21,7 @@ logging.getLogger("apscheduler").setLevel(logging.WARNING)
 
 
 log = logging.getLogger(__file__)
+log.setLevel(settings.log_level)
 
 
 async def network_sync() -> None:

@@ -6,6 +6,9 @@
 * `LOG_DIR` (optional, default: /var/log/pychain)
   * Filesystem directory where logs will be written
 
+* `LOG_LEVEL` (optional, default: INFO)
+  * Choices: DEBUG, INFO, WARNING, ERROR, CRITICAL
+
 * `NETWORK_SYNC_INTERVAL` (optional, default: 60)
   * How many seconds should elapse between executions of network_scan.py.
 

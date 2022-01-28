@@ -1,3 +1,4 @@
+import logging
 from typing import (
     List,
     Union,
@@ -11,6 +12,12 @@ from .models import (
     GUID,
     Node,
 )
+
+
+__all__ = ("Database",)
+
+
+log = logging.getLogger(__name__)
 
 
 class Database:
@@ -42,7 +49,7 @@ class Database:
 
     def create_schema(self):
         dsn = f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
-        engine = sa.create_engine(dsn, echo=True)
+        engine = sa.create_engine(dsn, echo=log.level <= logging.DEBUG)
         self.metadata.create_all(engine)
 
     async def ensure_message(self) -> None:
