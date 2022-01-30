@@ -12,19 +12,10 @@ log = logging.getLogger(__file__)
 
 class _Settings:
     def __init__(self):
-        self._boot_node = None
         self._db_host = None
 
     @property
-    def boot_node(self):
-        if self._boot_node is None:
-            from pychain.node.models import GUID, Node
-
-            self._boot_node = Node(GUID(0), self._boot_node_address)
-        return self._boot_node
-
-    @property
-    def _boot_node_address(self) -> str:
+    def boot_node_address(self) -> str:
         return os.environ["BOOT_NODE"]
 
     @property

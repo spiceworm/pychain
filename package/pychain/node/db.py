@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 from typing import (
     List,
@@ -107,7 +109,7 @@ class Database:
                 "UPDATE messages SET counter = counter + 1 WHERE id=1 RETURNING counter"
             )
 
-    async def init(self) -> None:
+    async def init(self) -> Database:
         self.pool = await asyncpg.create_pool(
             host=self.host,
             port=self.port,
@@ -117,6 +119,7 @@ class Database:
             min_size=5,
             max_size=10,
         )
+        return self
 
     async def set_client(self, address: str, guid: Union[GUID, int]) -> None:
         async with self.pool.acquire() as conn:

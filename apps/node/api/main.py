@@ -9,6 +9,7 @@ from v1 import router as v1_router
 
 from pychain.node.config import settings
 from pychain.node.db import Database
+from pychain.node.models import Node
 
 
 logging.basicConfig(
@@ -47,7 +48,10 @@ def create_app():
         db.create_schema()
 
         log.debug("Initializing async database connection")
-        await db.init()
+        Node.db = await db.init()
+
+        if not settings.is_boot_node:
+            Node.boot_node = Node(0, settings.boot_node_address)
 
         log.debug("Initializing message row")
         await db.ensure_message()

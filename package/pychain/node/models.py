@@ -20,7 +20,6 @@ from .exceptions import (
     GUIDNotInNetwork,
     NetworkJoinException,
 )
-from .config import settings
 
 
 __all__ = (
@@ -182,6 +181,9 @@ class GUID:
 
 @functools.total_ordering
 class Node:
+    boot_node: Node = None
+    db = None
+
     def __init__(self, guid: Union[GUID, int], address: Union[IPv4Address, str, None]):
         try:
             address = IPv4Address(address)
@@ -223,20 +225,20 @@ class Node:
         resp.raise_for_status()
         return resp.json()
 
-    async def get_peers(self, db, session: ClientSession) -> List[Node]:
+    async def get_peers(self, session: ClientSession) -> List[Node]:
         """ """
         peers = []
 
-        max_guid = await db.get_max_guid()
+        max_guid = await self.db.get_max_guid()
         peer_guids = self.guid.get_primary_peers(max_guid)
         log.debug("Searching for peers in %s", peer_guids)
 
         while peer_guids:
             guid = peer_guids.pop(0)
-            peer = await db.get_node(guid)
+            peer = await self.db.get_node(guid)
             if await peer.is_alive(session):
                 peers.append(peer)
-                await db.ensure_node(peer.address, peer.guid)
+                await self.db.ensure_node(peer.address, peer.guid)
             else:
                 log.info("%s: Unresponsive/unknown", peer)
                 next_guid = peer_guids[0] if peer_guids else self.guid
@@ -244,11 +246,11 @@ class Node:
                 log.info("Finding backup peer in %s", peer, backup_guids)
 
                 for backup_guid in backup_guids:
-                    backup_peer = await db.get_node(backup_guid)
+                    backup_peer = await self.db.get_node(backup_guid)
                     if backup_peer is not None and await backup_peer.is_alive(session):
                         log.info("%s: Responsive backup", backup_peer)
                         peers.append(backup_peer)
-                        await db.ensure_node(backup_peer.address, backup_peer.guid)
+                        await self.db.ensure_node(backup_peer.address, backup_peer.guid)
                         break
 
         return peers
@@ -283,7 +285,7 @@ class Node:
         """
         if self.address is None:
             log.info("Retrieving %s address from boot node", self.guid)
-            self.address = await settings.boot_node.get_node_address(self.guid, session)
+            self.address = await self.boot_node.get_node_address(self.guid, session)
 
         async with request(f"http://{self.address}{path}", *args, **kwargs) as resp:
             resp.raise_for_status()
