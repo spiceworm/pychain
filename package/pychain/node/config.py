@@ -12,11 +12,15 @@ log = logging.getLogger(__file__)
 
 class _Settings:
     def __init__(self):
+        self._boot_node_address = None
         self._db_host = None
 
     @property
     def boot_node_address(self) -> str:
-        return os.environ["BOOT_NODE"]
+        if self._boot_node_address is None:
+            value = os.environ["BOOT_NODE"]
+            self._boot_node_address = socket.gethostbyname(value)
+        return self._boot_node_address
 
     @property
     def db_host(self) -> str:
