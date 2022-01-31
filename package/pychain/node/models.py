@@ -219,11 +219,24 @@ class Node:
             "guid": int(self.guid),
         }
 
-    def broadcast(self, message: Message):
-        message.originator = message.originator or self
+    def synchronous_broadcast(self, message: Message) -> bool:
+        """
+        This method is used to propagate messages between nodes. This is temporary until I can
+        figure out how to execute async functions using rq or get arq working.
+        """
         resp = requests.put(f"http://{self.address}/api/v1/broadcast", json=message.as_json())
         resp.raise_for_status()
         return resp.json()
+
+    async def broadcast(self, message: Message, session: ClientSession) -> bool:
+        """
+        This method is used to initiate a broadcast from the node of origin. It needs to be async
+        so we can call db methods to set the message's TTL.
+        """
+        if message.originator is None:
+            message.originator = self
+            message.ttl = len(self.guid.get_primary_peers(await self.db.get_max_guid()))
+        return await self._send(session.put, "/api/v1/broadcast", session, json=message.as_json())
 
     async def get_peers(self, session: ClientSession) -> List[Node]:
         """ """
@@ -319,11 +332,13 @@ class Message:
         id: Union[int, None] = None,
         originator: Union[Node, None] = None,
         broadcast_timestamp: Union[float, None] = None,
+        ttl: Union[int, None] = None,
     ):
         self.data = data
         self.broadcast_timestamp = broadcast_timestamp
         self.id = id
         self.originator = originator
+        self.ttl = ttl
 
     def __repr__(self) -> str:
         return (
@@ -331,7 +346,8 @@ class Message:
             f"data={self.data}, "
             f"id={self.id}, "
             f"originator={repr(self.originator)}, "
-            f"broadcast_timestamp={self.broadcast_timestamp})"
+            f"broadcast_timestamp={self.broadcast_timestamp}), "
+            f"ttl={self.ttl}"
         )
 
     def as_json(self) -> dict:
@@ -340,21 +356,18 @@ class Message:
             "broadcast_timestamp": self.broadcast_timestamp,
             "id": self.id,
             "originator": self.originator.as_json(),
+            "ttl": self.ttl,
         }
 
 
 class DeadPeer(Message):
-    def __init__(
-        self,
-        guid: GUID,
-        id: Union[int, None] = None,
-        originator: Union[Node, None] = None,
-        broadcast_timestamp: Union[float, None] = None,
-    ):
+    def __init__(self, guid: Union[GUID, int]):
         data = {
             "event": {
                 "name": "DEAD_PEER",
-                "guid": int(guid),
+                "args": {
+                    "guid": int(guid),
+                },
             },
         }
-        super().__init__(data, id, originator, broadcast_timestamp)
+        super().__init__(data, None, None, None)

@@ -96,11 +96,20 @@ Handle case where boot node goes down. It will need to remember the GUIDs it has
 # If it has not ran a single time yet, the client will not even know
 # it's own GUID and address.
 
+import aiohttp, asyncio
 from pychain.node.config import settings
 from pychain.node.db import Database
-from pychain.node.models import Message
-db = Database(host=settings.db_host, password=settings.db_password)
-await db.init()
-client = await db.get_client()
-client.broadcast(Message({"event": "something", "args": [1], "kwargs": {2: 3}}))
+from pychain.node.models import Message, Node
+
+async def main():
+    db = Database(host=settings.db_host, password=settings.db_password)
+    Node.db = await db.init()
+    client = await db.get_client()
+
+    async with aiohttp.ClientSession() as session:
+        msg = Message({"event": "something", "args": [1], "kwargs": {2: 3}})
+        await client.broadcast(msg, session)
+
+
+asyncio.run(main())
 ```

@@ -48,7 +48,11 @@ async def _broadcast(request: Request) -> bool:
         message.broadcast_timestamp = time.time()
         log.info("Client of origin broadcasting %s", message)
         should_broadcast = True
+    elif message.ttl == 0:
+        log.info("Not broadcasting %s. TTL == 0", message)
+        should_broadcast = False
     elif await db.update_message_count_if_less_than(message.id):
+        message.ttl -= 1
         log.info("Received new %s", message)
         await db.ensure_node(message.originator.address, message.originator.guid)
         should_broadcast = True
@@ -59,7 +63,7 @@ async def _broadcast(request: Request) -> bool:
     if should_broadcast:
         for peer in await client.get_peers(request.state.session):
             log.debug("Broadcasting message to %s", peer)
-            request.state.mempool.enqueue(peer.broadcast, message)
+            request.state.mempool.enqueue(peer.synchronous_broadcast, message)
     return should_broadcast
 
 
