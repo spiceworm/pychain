@@ -49,6 +49,10 @@ class _Settings:
         return int(os.getenv("NETWORK_SYNC_INTERVAL", "60"))
 
     @property
+    def network_sync_jitter(self) -> int:
+        return int(os.getenv("NETWORK_SYNC_INTERVAL", "30"))
+
+    @property
     def storage_dir(self) -> Path:
         return Path(os.getenv("STORAGE_DIR", "/usr/local/etc/pychain"))
 

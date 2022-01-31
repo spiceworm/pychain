@@ -60,7 +60,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    jitter = random.randint(1, 30)
+    jitter = random.randint(1, settings.network_sync_jitter)
     network_sync_interval = settings.network_sync_interval + jitter
     scheduler = BlockingScheduler()
     scheduler.add_job(main, trigger="interval", seconds=network_sync_interval)

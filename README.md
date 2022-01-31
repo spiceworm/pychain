@@ -12,6 +12,9 @@
 * `NETWORK_SYNC_INTERVAL` (optional, default: 60)
   * How many seconds should elapse between executions of network_scan.py.
 
+* `NETWORK_SYNC_JITTER` (optional, default: 30)
+  * Maximum number of seconds of jitter to add to NETWORK_SYNC_INTERVAL.
+
 * `STORAGE_DIR` (optional, default: /usr/local/etc/pychain)
   * Filesystem directory where data will be written
 
