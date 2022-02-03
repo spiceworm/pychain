@@ -20,8 +20,9 @@
 
 ## Development Environment
 ```bash
-# Start up 1 boot node and 3 client nodes (can change the number of client nodes)
-$ ./run.py 3
+# Start 1 boot node and 4 client nodes with some environment variable tweaks suitable
+# for a development environment.
+$ ./run.py 70 -e NETWORK_SYNC_INTERVAL=15 -e NETWORK_SYNC_JITTER=5 -e LOG_LEVEL=DEBUG
 
 # Tail logs to observe node behavior
 $ docker exec -it pychain_client_1_1 tail -f /var/log/pychain/{api,network_sync}.log
@@ -85,7 +86,17 @@ Mitigate sybil attack where attacker could have several client join and then lea
   the requests to timeout to these malicious nodes.
 
 Handle case where boot node goes down. It will need to remember the GUIDs it has
-  allocated previously.
+  allocated previously. All nodes should mount their databases
+
+Make adding nodes to the database better. It's ugly to call `ensure_node` all over the
+  place.
+
+Fix ensure_address so that it is less cludgy and does not ONLY use the boot node
+
+Add a counter to node entries that increments if the node is unresponsive. Ignore
+  nodes that have not been responsive after N attempts.
+
+TODO: Figure out how to prevent flooding the message with duplicate messages as it happens ALOT
 ```
 
 ### Message Broadcasting
