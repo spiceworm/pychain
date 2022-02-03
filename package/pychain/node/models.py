@@ -333,12 +333,14 @@ class Message:
         originator: Union[Node, None] = None,
         broadcast_timestamp: Union[float, None] = None,
         ttl: Union[int, None] = None,
+        seen_by: Union[List[int], None] = None,
     ):
         self.data = data
         self.broadcast_timestamp = broadcast_timestamp
         self.id = id
         self.originator = originator
         self.ttl = ttl
+        self.seen_by = seen_by or []
 
     def __repr__(self) -> str:
         return (
@@ -347,7 +349,8 @@ class Message:
             f"id={self.id}, "
             f"originator={repr(self.originator)}, "
             f"broadcast_timestamp={self.broadcast_timestamp}), "
-            f"ttl={self.ttl}"
+            f"ttl={self.ttl}, "
+            f"seen_by={self.seen_by}"
         )
 
     def as_json(self) -> dict:
@@ -357,6 +360,7 @@ class Message:
             "id": self.id,
             "originator": self.originator.as_json(),
             "ttl": self.ttl,
+            "seen_by": self.seen_by,
         }
 
 

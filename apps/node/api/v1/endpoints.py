@@ -65,6 +65,8 @@ async def _broadcast(request: Request) -> bool:
         should_broadcast = False
 
     if should_broadcast:
+        message.seen_by.append(int(client.guid))
+
         for peer in await client.get_peers(request.state.session):
             log.debug("Broadcasting message to %s", peer)
             request.state.mempool.enqueue(peer.synchronous_broadcast, message)
