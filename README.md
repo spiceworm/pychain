@@ -110,7 +110,7 @@ TODO: Figure out how to prevent flooding the message with duplicate messages as 
 import aiohttp, asyncio
 from pychain.node.config import settings
 from pychain.node.db import Database
-from pychain.node.models import Message, Node
+from pychain.node.models import DeadPeer, Node
 
 async def main():
     db = Database(host=settings.db_host, password=settings.db_password)
@@ -118,7 +118,7 @@ async def main():
     client = await db.get_client()
 
     async with aiohttp.ClientSession() as session:
-        msg = Message({"event": "something", "args": [1], "kwargs": {2: 3}})
+        msg = DeadPeer(1)
         await client.broadcast(msg, session)
 
 

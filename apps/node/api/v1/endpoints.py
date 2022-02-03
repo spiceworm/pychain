@@ -60,6 +60,14 @@ async def _broadcast(request: Request) -> bool:
         message.ttl -= 1
         await db.ensure_node(message.originator.address, message.originator.guid)
         should_broadcast = True
+
+        event = message.data.get("event", {})
+        match name := event.get("name"):
+            case "DEAD_PEER":
+                log.info("%s event detected", name)
+            case _:
+                log.warning("Unhandled event '%s'", name)
+
     else:
         log.info("Duplicate / old")
         should_broadcast = False
