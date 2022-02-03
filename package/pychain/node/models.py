@@ -248,7 +248,7 @@ class Node:
 
         while peer_guids:
             guid = peer_guids.pop(0)
-            peer = await self.db.get_node(guid)
+            peer = await self.db.get_node_by_guid(guid)
             if await peer.is_alive(session):
                 peers.append(peer)
                 await self.db.ensure_node(peer.address, peer.guid)
@@ -259,8 +259,8 @@ class Node:
                 log.info("Finding backup peer in %s", peer, backup_guids)
 
                 for backup_guid in backup_guids:
-                    backup_peer = await self.db.get_node(backup_guid)
-                    if backup_peer is not None and await backup_peer.is_alive(session):
+                    backup_peer = await self.db.get_node_by_guid(backup_guid)
+                    if await backup_peer.is_alive(session):
                         log.info("%s: Responsive backup", backup_peer)
                         peers.append(backup_peer)
                         await self.db.ensure_node(backup_peer.address, backup_peer.guid)

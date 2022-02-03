@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ipaddress import IPv4Address
 import logging
 from typing import (
     List,
@@ -76,13 +77,19 @@ class Database:
                 address = node["address"]
                 return Node(guid_id, address)
 
-    async def get_node(self, guid: [GUID, int]) -> Node:
+    async def get_node_by_address(self, address: [IPv4Address, str]) -> Union[Node, None]:
+        async with self.pool.acquire() as conn:
+            if node := await conn.fetchrow("SELECT guid FROM nodes WHERE address=$1", str(address)):
+                guid_id = node["guid"]
+                return Node(guid_id, address)
+            return None
+
+    async def get_node_by_guid(self, guid: [GUID, int]) -> Node:
         async with self.pool.acquire() as conn:
             if node := await conn.fetchrow("SELECT address FROM nodes WHERE guid=$1", int(guid)):
                 address = node["address"]
-            else:
-                address = None
-            return Node(guid, address)
+                return Node(guid, address)
+            return Node(guid, None)
 
     async def get_nodes(self) -> List[Node]:
         async with self.pool.acquire() as conn:

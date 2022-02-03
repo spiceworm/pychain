@@ -95,7 +95,7 @@ async def _node_address(guid_id: int, request: Request) -> Union[str, None]:
     Lookup the address of the Node assigned to `guid_id`.
     Return the address if it is known or None if it is not.
     """
-    if node := await request.state.db.get_node(guid_id):
+    if node := await request.state.db.get_node_by_guid(guid_id):
         log.info("Resolve %s to %s", guid_id, node)
         return node.address
 
