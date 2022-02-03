@@ -235,7 +235,9 @@ class Node:
         """
         if message.originator is None:
             message.originator = self
-            message.ttl = len(self.guid.get_primary_peers(await self.db.get_max_guid()))
+            max_guid = await self.db.get_max_guid()
+            peer_count = len(self.guid.get_primary_peers(max_guid))
+            message.ttl = int(int(max_guid) / peer_count / 2) - 1
         return await self._send(session.put, "/api/v1/broadcast", session, json=message.as_json())
 
     async def get_peers(self, session: ClientSession) -> List[Node]:
