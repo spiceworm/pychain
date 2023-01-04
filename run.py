@@ -23,7 +23,7 @@ services:
     """
     boot_node_template = """
     boot_{n}_db:
-        image: postgres:14.1-bullseye
+        image: postgres:15.1-bullseye
         environment:
             POSTGRES_PASSWORD: "00000000000000{n}"
     boot_{n}:
@@ -44,7 +44,7 @@ services:
 
     client_node_template = """
     client_{n}_db:
-        image: postgres:14.1-bullseye
+        image: postgres:15.1-bullseye
         environment:
             POSTGRES_PASSWORD: "00000000000000{n}"
     client_{n}:

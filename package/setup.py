@@ -6,11 +6,11 @@ from setuptools import find_packages, setup
 here = os.path.abspath(os.path.dirname(__file__))
 
 requires = [
-    "aiohttp>=3.8.1",
-    "asyncpg>=0.25.0",
-    "psycopg2-binary>=2.9.3",
-    "SQLAlchemy>=1.4.31",
-    "requests>=2.26.0",
+    "aiohttp>=3.8.3",
+    "asyncpg>=0.27.0",
+    "psycopg2-binary>=2.9.5",
+    "SQLAlchemy>=1.4.46",
+    "requests>=2.28.1",
 ]
 
 about = {}
@@ -41,7 +41,7 @@ setup(
         "Natural Language :: English",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
     ],
     project_urls={
         "Source": "https://github.com/ecaz-eth/pychain",
