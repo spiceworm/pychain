@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
 Script used to generate docker-compose files with a variable number
 of client node containers dictated by `client_count` argument.
