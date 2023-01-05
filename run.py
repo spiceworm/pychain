@@ -22,31 +22,18 @@ version: "3.7"
 services:
     """
     boot_node_template = """
-    boot_{n}_db:
-        image: postgres:15.1-bullseye
-        environment:
-            POSTGRES_PASSWORD: "00000000000000{n}"
     boot_{n}:
         image: pychain_node
         build:
             context: '.'
             dockerfile: './apps/node/Dockerfile'
-        environment:
-            DB_HOST: boot_{n}_db
-            DB_PASSWORD: '00000000000000{n}'
         networks:
             default:
                 aliases:
                     - 'boot.com'
-        depends_on:
-            - boot_{n}_db
     """
 
     client_node_template = """
-    client_{n}_db:
-        image: postgres:15.1-bullseye
-        environment:
-            POSTGRES_PASSWORD: "00000000000000{n}"
     client_{n}:
         image: pychain_node
         build:
@@ -54,12 +41,8 @@ services:
             dockerfile: './apps/node/Dockerfile'
         environment:
             BOOT_NODE: 'boot.com'
-            DB_HOST: 'client_{n}_db'
-            DB_PASSWORD: '00000000000000{n}'
 {env}
             # NETWORK_SYNC_INTERVAL: '5'
-        depends_on:
-            - client_{n}_db
     """
 
     environment = []

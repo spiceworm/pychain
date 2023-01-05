@@ -7,9 +7,6 @@ here = os.path.abspath(os.path.dirname(__file__))
 
 requires = [
     "aiohttp>=3.8.3",
-    "asyncpg>=0.27.0",
-    "psycopg2-binary>=2.9.5",
-    "SQLAlchemy>=1.4.46",
     "requests>=2.28.1",
 ]
 

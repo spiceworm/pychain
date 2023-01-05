@@ -13,7 +13,6 @@ log = logging.getLogger(__file__)
 class _Settings:
     def __init__(self):
         self._boot_node_address = None
-        self._db_host = None
 
     @property
     def boot_node_address(self) -> str:
@@ -23,14 +22,8 @@ class _Settings:
         return self._boot_node_address
 
     @property
-    def db_host(self) -> str:
-        if self._db_host is None:
-            self._db_host = socket.gethostbyname(os.environ["DB_HOST"])
-        return self._db_host
-
-    @property
-    def db_password(self) -> str:
-        return os.environ["DB_PASSWORD"]
+    def data_dir(self) -> Path:
+        return self.storage_dir / "data"
 
     @property
     def is_boot_node(self) -> bool:

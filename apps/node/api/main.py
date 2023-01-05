@@ -8,7 +8,7 @@ import rq
 from v1 import router as v1_router
 
 from pychain.node.config import settings
-from pychain.node.db import Database
+from pychain.node.db import Storage
 from pychain.node.models import Node
 
 
@@ -25,7 +25,7 @@ log.setLevel(settings.log_level)
 
 def create_app():
     api = fastapi.FastAPI()
-    db = Database(host=settings.db_host, password=settings.db_password)
+    db = Storage(data_dir=settings.data_dir)
     mempool = rq.Queue("mempool", connection=redis.Redis())
     session = aiohttp.ClientSession()
     api.include_router(v1_router, prefix="/api/v1")
@@ -44,17 +44,9 @@ def create_app():
     async def startup() -> None:
         log.debug("Starting client API")
 
-        log.debug("Creating database schema")
-        db.create_schema()
-
-        log.debug("Initializing async database connection")
-        Node.db = await db.init()
-
+        Node.db = db
         if not settings.is_boot_node:
             Node.boot_node = Node(0, settings.boot_node_address)
-
-        log.debug("Initializing message row")
-        await db.ensure_message()
 
     @api.on_event("shutdown")
     async def shutdown() -> None:

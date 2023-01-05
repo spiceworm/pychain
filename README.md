@@ -22,7 +22,7 @@
 ```bash
 # Start 1 boot node and 4 client nodes with some environment variable tweaks suitable
 # for a development environment.
-$ ./run.py 70 -e NETWORK_SYNC_INTERVAL=15 -e NETWORK_SYNC_JITTER=5 -e LOG_LEVEL=DEBUG
+$ ./run.py 4 -e NETWORK_SYNC_INTERVAL=15 -e NETWORK_SYNC_JITTER=5 -e LOG_LEVEL=DEBUG
 
 # Tail logs to observe node behavior
 $ docker exec -it pychain_client_1_1 tail -f /var/log/pychain/{api,network_sync}.log
@@ -36,15 +36,12 @@ $ docker-compose -f test.yml up --build
 
 ## Architecture
 ```
-Each node is running
+Each node is running the following processes managed by supervisor:
+- network_sync: process that allows client to join the network and synchronize state with peers.
 - nginx: reverse proxy to API
-- uvicorn: Serving API written in FastAPI
-- python: Long running `network_sync` process that causes has client join the network
-    and synchronize with peers
-- postgres: Running in sidecar container alongside each node container and is used
-    to store node state.
-
-nginx, uvicorn, and python processes are managed by supervisor in the client container.
+- redis: Used as storage for rq worker processes.
+- rq-mempool-worker: Queues messages broadcast from peers.
+- uvicorn: Asynchronously serves API requests.
 ```
 
 ## Development notes
@@ -109,13 +106,12 @@ TODO: Figure out how to prevent flooding the message with duplicate messages as 
 
 import aiohttp, asyncio
 from pychain.node.config import settings
-from pychain.node.db import Database
+from pychain.node.db import Storage
 from pychain.node.models import DeadPeer, Node
 
 async def main():
-    db = Database(host=settings.db_host, password=settings.db_password)
-    Node.db = await db.init()
-    client = await db.get_client()
+    Node.db = db = Storage(data_dir=settings.data_dir)
+    client = db.get_client()
 
     async with aiohttp.ClientSession() as session:
         msg = DeadPeer(1)

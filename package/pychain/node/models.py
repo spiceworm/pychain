@@ -181,10 +181,10 @@ class GUID:
 
 @functools.total_ordering
 class Node:
-    boot_node: Node = None
+    boot_node = None
     db = None
 
-    def __init__(self, guid: Union[GUID, int], address: Union[IPv4Address, str, None]):
+    def __init__(self, guid: Union[GUID, int, str], address: Union[IPv4Address, str, None]):
         try:
             address = IPv4Address(address)
         except AddressValueError:
@@ -235,7 +235,7 @@ class Node:
         """
         if message.originator is None:
             message.originator = self
-            max_guid = await self.db.get_max_guid()
+            max_guid = self.db.get_max_guid()
             peer_count = len(self.guid.get_primary_peers(max_guid))
             message.ttl = int(int(max_guid) / peer_count / 2) - 1
         return await self._send(session.put, "/api/v1/broadcast", session, json=message.as_json())
@@ -244,16 +244,16 @@ class Node:
         """ """
         peers = []
 
-        max_guid = await self.db.get_max_guid()
+        max_guid = self.db.get_max_guid()
         peer_guids = self.guid.get_primary_peers(max_guid)
         log.debug("Searching for peers in %s", peer_guids)
 
         while peer_guids:
             guid = peer_guids.pop(0)
-            peer = await self.db.get_node_by_guid(guid)
+            peer = self.db.get_node_by_guid(guid)
             if await peer.is_alive(session):
                 peers.append(peer)
-                await self.db.ensure_node(peer.address, peer.guid)
+                self.db.ensure_node(peer.address, peer.guid)
             else:
                 log.info("%s: Unresponsive/unknown", peer)
                 next_guid = peer_guids[0] if peer_guids else self.guid
@@ -261,11 +261,11 @@ class Node:
                 log.info("Finding backup peer in %s", peer, backup_guids)
 
                 for backup_guid in backup_guids:
-                    backup_peer = await self.db.get_node_by_guid(backup_guid)
+                    backup_peer = self.db.get_node_by_guid(backup_guid)
                     if await backup_peer.is_alive(session):
                         log.info("%s: Responsive backup", backup_peer)
                         peers.append(backup_peer)
-                        await self.db.ensure_node(backup_peer.address, backup_peer.guid)
+                        self.db.ensure_node(backup_peer.address, backup_peer.guid)
                         break
 
         return peers
@@ -290,8 +290,8 @@ class Node:
 
     async def join_network(self, session: ClientSession) -> Node:
         if resp := await self._send(session.put, "/api/v1/network/join", session):
-            guid_id, address = resp["guid"], resp["address"]
-            return Node(guid_id, address)
+            guid, address = resp["guid"], resp["address"]
+            return Node(guid, address)
         raise NetworkJoinException(f"Sent join request to non-boot node: {self}")
 
     async def _send(self, request: Callable, path: str, session: ClientSession, *args, **kwargs):

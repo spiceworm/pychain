@@ -1,165 +1,91 @@
 from __future__ import annotations
 
-from ipaddress import IPv4Address
+import json
 import logging
-from typing import (
-    List,
-    Union,
-)
-
-import asyncpg
-import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
+import os
+import pathlib
+from typing import Union
 
 from .models import (
     GUID,
+    Message,
     Node,
 )
 
 
-__all__ = ("Database",)
+__all__ = ("Storage",)
 
 
 log = logging.getLogger(__name__)
 
 
-class Database:
-    metadata = sa.MetaData()
+class Storage:
+    def __init__(self, data_dir: pathlib.Path):
+        self.data_dir = data_dir
 
-    def __init__(
-        self,
-        *,
-        host: str,
-        password: str,
-        port: int = 5432,
-        user: str = "postgres",
-        database: str = "postgres",
-    ):
-        self.user = user
-        self.password = password
-        self.host = host
-        self.port = port
-        self.database = database
+        self.nodes_dir = self.data_dir / "nodes"
+        self.nodes_dir.mkdir(parents=True, exist_ok=True)
 
-    async def add_node(self, address: str) -> Node:
+        self.client_dir = self.nodes_dir / "client"
+        self.client_dir.mkdir(parents=True, exist_ok=True)
+
+        self.pool_dir = self.nodes_dir / "pool"
+        self.pool_dir.mkdir(parents=True, exist_ok=True)
+
+        self.messages_dir = self.data_dir / "messages"
+        self.messages_dir.mkdir(parents=True, exist_ok=True)
+
+    def add_node(self, address: str) -> Node:
         # Only boot nodes should invoke this method
-        async with self.pool.acquire() as conn:
-            guid_id = await conn.fetchval(
-                "INSERT INTO nodes (address) VALUES ($1) RETURNING guid",
-                address,
-            )
-            return Node(guid_id, address)
+        max_guid = int(self.get_max_guid())
+        next_guid = max_guid + 1
+        node_fp = self.pool_dir / str(next_guid)
+        node_fp.write_text(address)
+        return Node(next_guid, address)
 
-    def create_schema(self):
-        dsn = f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
-        engine = sa.create_engine(dsn, echo=log.level <= logging.DEBUG)
-        self.metadata.create_all(engine)
+    def ensure_node(self, address: str, guid: Union[GUID, int, str]) -> None:
+        node_fp = self.pool_dir / str(guid)
+        if not node_fp.exists():
+            node_fp.write_text(address)
 
-    async def ensure_message(self) -> None:
-        async with self.pool.acquire() as conn:
-            await conn.execute(
-                "INSERT INTO messages (id, counter) VALUES (1, 0) ON CONFLICT DO NOTHING"
-            )
+    def get_client(self) -> Union[Node, None]:
+        if contents := os.listdir(self.client_dir):
+            client_fp = self.client_dir / contents[0]
+            address = client_fp.read_text()
+            guid = client_fp.name
+            return Node(guid, address)
 
-    async def ensure_node(self, address: str, guid: Union[GUID, int]) -> None:
-        async with self.pool.acquire() as conn:
-            query = """
-                INSERT INTO nodes (address, guid) 
-                VALUES ($1, $2) 
-                ON CONFLICT DO NOTHING
-            """
-            await conn.execute(query, address, int(guid))
+    def get_node_by_guid(self, guid: [GUID, int, str]) -> Node:
+        node_fp = self.pool_dir / str(guid)
+        if node_fp.exists():
+            address = node_fp.read_text()
+            return Node(guid, address)
+        return Node(guid, None)
 
-    async def get_client(self) -> Union[Node, None]:
-        async with self.pool.acquire() as conn:
-            if node := await conn.fetchrow("SELECT * FROM nodes WHERE is_client IS TRUE"):
-                guid_id = node["guid"]
-                address = node["address"]
-                return Node(guid_id, address)
+    def get_max_guid(self) -> GUID:
+        if node_files := os.listdir(self.pool_dir):
+            max_guid = max(int(fn) for fn in node_files)
+            return GUID(max_guid)
+        return GUID(0)
 
-    async def get_node_by_address(self, address: [IPv4Address, str]) -> Union[Node, None]:
-        async with self.pool.acquire() as conn:
-            if node := await conn.fetchrow("SELECT guid FROM nodes WHERE address=$1", str(address)):
-                guid_id = node["guid"]
-                return Node(guid_id, address)
-            return None
+    def get_max_guid_node(self) -> Node:
+        guid = self.get_max_guid()
+        node_fp = self.pool_dir / str(guid)
+        address = node_fp.read_text()
+        return Node(guid, address)
 
-    async def get_node_by_guid(self, guid: [GUID, int]) -> Node:
-        async with self.pool.acquire() as conn:
-            if node := await conn.fetchrow("SELECT address FROM nodes WHERE guid=$1", int(guid)):
-                address = node["address"]
-                return Node(guid, address)
-            return Node(guid, None)
+    def get_max_message_id(self) -> int:
+        if message_files := os.listdir(self.messages_dir):
+            return max(int(fn) for fn in message_files)
+        return 0
 
-    async def get_nodes(self) -> List[Node]:
-        async with self.pool.acquire() as conn:
-            nodes = await conn.fetch("SELECT guid, address FROM nodes ORDER BY guid")
-            return [Node(n["guid"], n["address"]) for n in nodes]
+    def save_message(self, message: Message) -> None:
+        msg_fp = self.messages_dir / str(message.id)
+        if not msg_fp.exists():
+            with open(msg_fp, 'w') as f:
+                json.dump(message.as_json(), f)
 
-    async def get_max_guid(self) -> GUID:
-        async with self.pool.acquire() as conn:
-            guid_id = await conn.fetchval("SELECT MAX(guid) FROM nodes")
-            return GUID(guid_id)
-
-    async def get_max_guid_node(self) -> Node:
-        async with self.pool.acquire() as conn:
-            node = await conn.fetchrow(
-                "SELECT address, guid FROM nodes WHERE guid = (SELECT MAX(guid) FROM nodes)"
-            )
-            address = node["address"]
-            guid_id = node["guid"]
-            return Node(guid_id, address)
-
-    async def increment_message_count(self) -> None:
-        async with self.pool.acquire() as conn:
-            return await conn.fetchval(
-                "UPDATE messages SET counter = counter + 1 WHERE id=1 RETURNING counter"
-            )
-
-    async def init(self) -> Database:
-        self.pool = await asyncpg.create_pool(
-            host=self.host,
-            port=self.port,
-            database=self.database,
-            user=self.user,
-            password=self.password,
-            min_size=5,
-            max_size=10,
-        )
-        return self
-
-    async def set_client(self, address: str, guid: Union[GUID, int]) -> None:
-        async with self.pool.acquire() as conn:
-            await conn.execute(
-                "INSERT INTO nodes (address, guid, is_client) VALUES ($1, $2, true)",
-                address,
-                int(guid),
-            )
-
-    async def update_message_count_if_less_than(self, count: int) -> bool:
-        """
-        Returns true if and update was performed otherwise false
-        """
-        async with self.pool.acquire() as conn:
-            output = await conn.execute(
-                "UPDATE messages SET counter = $1 WHERE id=1 AND $1 > (SELECT counter FROM messages WHERE id=1)",
-                count,
-            )
-            return output != "UPDATE 0"
-
-
-Message = sa.Table(
-    "messages",
-    Database.metadata,
-    sa.Column("id", sa.Integer, primary_key=True),
-    sa.Column("counter", sa.Integer, nullable=False, default=0),
-)
-
-Nodes = sa.Table(
-    "nodes",
-    Database.metadata,
-    sa.Column("id", sa.Integer, primary_key=True),
-    sa.Column("address", postgresql.INET, unique=True),
-    sa.Column("guid", sa.Integer, sa.Identity(start=1, cycle=False), unique=True),
-    sa.Column("is_client", sa.Boolean, default=False),
-)
+    def set_client(self, address: str, guid: Union[GUID, int, str]) -> None:
+        client_fp = self.client_dir / str(guid)
+        client_fp.write_text(address)
+        (self.pool_dir / str(guid)).symlink_to(client_fp)
