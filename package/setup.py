@@ -41,6 +41,6 @@ setup(
         "Programming Language :: Python :: 3.11",
     ],
     project_urls={
-        "Source": "https://github.com/ecaz-eth/pychain",
+        "Source": "https://github.com/spiceworm/pychain",
     },
 )
